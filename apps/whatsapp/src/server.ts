@@ -30,7 +30,9 @@ function buildHandler(): { handler: MessageHandler | null; reason?: string } {
   };
   try {
     const handler = createMessageHandler({
-      orchestrator: createDefaultOrchestrator({ channel: "whatsapp" }),
+      // Short TTL: a shared phone serves many people, so a stale profile should age out
+      // fast between beneficiaries (plus the explicit "new person" reset command).
+      orchestrator: createDefaultOrchestrator({ channel: "whatsapp", ttlSeconds: 30 * 60 }),
       speech: createSpeechProvider(speechCfg),
       whatsapp: new MetaWhatsAppClient({ phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID, accessToken: env.WHATSAPP_ACCESS_TOKEN }),
       transcode: transcodeOggToWav,

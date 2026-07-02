@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { isHelpRequest } from "../src/help.js";
+import { isHelpRequest, isResetRequest } from "../src/help.js";
+
+describe("isResetRequest", () => {
+  it("detects Tamil and English 'new person' phrasings", () => {
+    expect(isResetRequest("புதிது")).toBe(true);
+    expect(isResetRequest("அடுத்தது புது நபர்")).toBe(true);
+    expect(isResetRequest("next person please")).toBe(true);
+    expect(isResetRequest("start over")).toBe(true);
+  });
+  it("does not fire on ordinary sentences containing 'new'", () => {
+    expect(isResetRequest("I have no new income this year")).toBe(false);
+    expect(isResetRequest("எனக்கு வயசு 67, விதவை")).toBe(false);
+  });
+});
 
 describe("isHelpRequest", () => {
   it("detects English and Tamil help words", () => {

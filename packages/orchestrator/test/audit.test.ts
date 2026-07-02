@@ -5,7 +5,7 @@ import { createOrchestrator, type AuditEntry, type SessionStore } from "../src/i
 
 function memoryStore(): SessionStore {
   const m = new Map<string, string>();
-  return { get: async (k) => m.get(k) ?? null, set: async (k, v) => void m.set(k, v) };
+  return { get: async (k) => m.get(k) ?? null, set: async (k, v) => void m.set(k, v), del: async (k) => void m.delete(k) };
 }
 const full = (o: Partial<Profile>): Profile => ({ ...EMPTY_PROFILE, ...o });
 

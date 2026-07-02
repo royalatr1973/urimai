@@ -12,6 +12,7 @@ function memoryStore(): SessionStore {
       m.set(k, v);
       return "OK";
     },
+    del: async (k) => void m.delete(k),
   };
 }
 

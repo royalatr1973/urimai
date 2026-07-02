@@ -28,7 +28,10 @@ const verdict = (schemeId: string, status: Verdict["status"]): Verdict => ({ sch
 const baseDeps = () => {
   const whatsapp = fakeWhatsApp();
   const speech = fakeSpeech();
-  const orchestrator = { handleTurn: vi.fn<(sessionId: string, text: string) => Promise<TurnResult>>() };
+  const orchestrator = {
+    handleTurn: vi.fn<(sessionId: string, text: string) => Promise<TurnResult>>(),
+    resetSession: vi.fn(async (_sessionId: string) => {}),
+  };
   const escalation = { enqueue: vi.fn(async () => {}) };
   const transcode = vi.fn(async () => Buffer.from("WAV"));
   const deps = {
@@ -99,6 +102,16 @@ describe("WhatsApp handler", () => {
     const [, bytes, mime] = whatsapp.sendImage.mock.calls[0]!;
     expect(Buffer.isBuffer(bytes)).toBe(true);
     expect(mime).toBe("image/svg+xml");
+  });
+
+  it("'new person' resets the session (shared phones must never merge profiles)", async () => {
+    const { deps, orchestrator, whatsapp } = baseDeps();
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "text", text: "புது நபர்" });
+
+    expect(orchestrator.resetSession).toHaveBeenCalledWith("wa:9199");
+    expect(orchestrator.handleTurn).not.toHaveBeenCalled();
+    expect(whatsapp.sendAudio).toHaveBeenCalledOnce(); // spoken confirmation
   });
 
   it("unsupported message kinds get a gentle text nudge, no orchestration", async () => {

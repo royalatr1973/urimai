@@ -49,7 +49,7 @@ export async function listLatestSchemes(): Promise<Scheme[]> {
 
 export { SEED_SCHEMES } from "./seed-data.js";
 export { getPrisma, PrismaClient } from "./client.js";
-export { encryptString, decryptString, encryptJson, decryptJson, getPiiKey } from "./crypto.js";
+export { encryptString, decryptString, encryptJson, decryptJson, getPiiKey, getKeyring, type Keyring } from "./crypto.js";
 export { writeAudit, listAudit, type AuditEntry } from "./audit.js";
 export { createBeneficiaryRecord, type ApplyInput } from "./beneficiary.js";
 export { DbEscalationQueue, listPendingEscalations, resolveEscalation, type EscalationInput } from "./escalation.js";

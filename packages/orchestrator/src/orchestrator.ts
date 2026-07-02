@@ -20,6 +20,7 @@ import { QUESTIONS, FIELD_PRIORITY, type Question } from "./questions.js";
 export interface SessionStore {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, mode: "EX", ttlSeconds: number): Promise<unknown>;
+  del(key: string): Promise<unknown>;
 }
 
 /** What an evaluation hands to the audit sink (no PII — profile is discovery facts only). */
@@ -190,7 +191,16 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     return { profile, verdicts };
   }
 
-  return { handleTurn, assess, reassess, loadProfile, saveProfile };
+  /**
+   * Forget everything known about a session. Critical for shared phones: one WhatsApp
+   * number often serves many beneficiaries (an operator, an SHG leader), and profiles must
+   * never merge across people. Channels expose this as a "new person" command.
+   */
+  async function resetSession(sessionId: string): Promise<void> {
+    await deps.store.del(sessionKey(sessionId));
+  }
+
+  return { handleTurn, assess, reassess, resetSession, loadProfile, saveProfile };
 }
 
 export type Orchestrator = ReturnType<typeof createOrchestrator>;

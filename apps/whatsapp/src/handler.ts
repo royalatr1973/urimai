@@ -12,7 +12,7 @@
 import type { TurnResult } from "@urimai/orchestrator";
 import type { Scheme } from "@urimai/types";
 import { renderDocumentCardSvg } from "./card.js";
-import { isHelpRequest } from "./help.js";
+import { isHelpRequest, isResetRequest } from "./help.js";
 import { buildResultsSummaryTamil } from "./reply.js";
 import type { EscalationQueue } from "./escalation.js";
 import type { SpeechProvider } from "./speech.js";
@@ -22,6 +22,7 @@ import type { InboundMessage, WhatsAppClient } from "./whatsapp.js";
 /** Just the slice of the orchestrator the channel uses — proves it's reused, not modified. */
 export interface OrchestratorLike {
   handleTurn(sessionId: string, text: string): Promise<TurnResult>;
+  resetSession(sessionId: string): Promise<void>;
 }
 
 export interface HandlerDeps {
@@ -41,6 +42,7 @@ export interface HandlerDeps {
 const MSG = {
   unsupported: "தயவுசெய்து உங்கள் நிலையை குரல் செய்தியாக அல்லது எழுத்தாக அனுப்புங்கள்.",
   handoff: "ஒரு உதவியாளர் விரைவில் உங்களைத் தொடர்புகொள்வார்.",
+  reset: "சரி, புதிதாகத் தொடங்குகிறோம். இந்த நபரின் நிலையைச் சொல்லுங்கள்.",
 };
 
 export function createMessageHandler(deps: HandlerDeps) {
@@ -76,6 +78,14 @@ export function createMessageHandler(deps: HandlerDeps) {
       await deps.escalation.enqueue({ from: msg.from, text, reason: "help_requested", at: now() });
       if (deps.helplineText) await deps.whatsapp.sendText(msg.from, deps.helplineText);
       await speak(msg.from, MSG.handoff);
+      return;
+    }
+
+    // "new person" → clear the session. Shared phones serve many beneficiaries; profiles
+    // must never merge across people.
+    if (isResetRequest(text)) {
+      await deps.orchestrator.resetSession(`wa:${msg.from}`);
+      await speak(msg.from, MSG.reset);
       return;
     }
 

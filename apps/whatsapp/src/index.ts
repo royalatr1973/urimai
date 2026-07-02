@@ -8,7 +8,7 @@ export { createMessageHandler, type HandlerDeps, type MessageHandler, type Orche
 export { createSpeechProvider, FallbackSpeechProvider, BhashiniSpeechProvider, SarvamSpeechProvider, type SpeechProvider, type SpeechConfig } from "./speech.js";
 export { MetaWhatsAppClient, parseInbound, verifyChallenge, verifySignature, type InboundMessage, type WhatsAppClient } from "./whatsapp.js";
 export { renderDocumentCardSvg } from "./card.js";
-export { isHelpRequest } from "./help.js";
+export { isHelpRequest, isResetRequest } from "./help.js";
 export { buildResultsSummaryTamil } from "./reply.js";
 export { RedisEscalationQueue, type EscalationQueue, type EscalationTicket } from "./escalation.js";
 export { transcodeOggToWav, type Transcoder } from "./transcode.js";
