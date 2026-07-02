@@ -1,0 +1,26 @@
+{
+  "name": "@urimai/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "dotenv -e ../../.env -- tsx watch src/server.ts",
+    "start": "dotenv -e ../../.env -- node dist/server.js"
+  },
+  "dependencies": {
+    "@urimai/cache": "workspace:*",
+    "@urimai/db": "workspace:*",
+    "@urimai/extractor": "workspace:*",
+    "@urimai/orchestrator": "workspace:*",
+    "@urimai/types": "workspace:*",
+    "fastify": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "dotenv-cli": "^7.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,105 @@
+flowchart TD
+
+  subgraph U["📱 User side — hardware"]
+    SP["Smartphone<br/>WhatsApp · voice in and out"]
+    OPD["Operator device<br/>browser · web app"]
+    FP["Feature phone<br/>IVR call · phase 2"]
+  end
+
+  subgraph CH["🔌 Channel layer"]
+    WA["WhatsApp Business API<br/>Meta Cloud API or BSP"]
+    WEB["Web / PWA front end<br/>self-serve and operator"]
+    IVR["Telephony / IVR<br/>phase 2"]
+  end
+
+  subgraph CORE["⚙️ Application core — channel-agnostic"]
+    GW["API gateway"]
+    ORCH["Conversation orchestrator<br/>flow and gap logic"]
+    SESS["Session manager"]
+  end
+
+  subgraph AI["🧠 Language and decision services"]
+    ASR["Tamil ASR<br/>speech → text · Bhashini / Sarvam"]
+    TTS["Tamil TTS<br/>text → speech · Bhashini / Sarvam"]
+    EXT["LLM profile extractor<br/>Claude API · understands only"]
+    RULE["Rules engine<br/>deterministic · decides eligibility"]
+  end
+
+  subgraph DATA["🗄️ Data stores"]
+    SDB[("Schemes and rules DB<br/>versioned · Postgres")]
+    RED[("Session cache<br/>Redis")]
+    IMG[("Document image assets<br/>object store / CDN")]
+    BDB[("Beneficiary records<br/>encrypted · apply stage only")]
+    LOG[("Audit log<br/>every decision")]
+  end
+
+  subgraph HUM["🙋 Human safety net"]
+    Q["Escalation queue"]
+    AGENT["Helpline / field operator"]
+  end
+
+  subgraph ADMIN["🛠️ Scheme curation — back office"]
+    CUR["Curator console"]
+    ING["GO ingestion<br/>LLM-assisted extraction"]
+    REV["Human review and sign-off"]
+  end
+
+  %% --- entry ---
+  SP -->|voice note| WA
+  OPD --> WEB
+  FP -.-> IVR
+  WA -->|webhook| GW
+  WEB --> GW
+  IVR -.-> GW
+  GW --> ORCH
+  ORCH <--> SESS
+  SESS --- RED
+
+  %% --- understand ---
+  ORCH -->|audio| ASR
+  ASR -->|Tamil text| ORCH
+  ORCH -->|free text| EXT
+  EXT -->|structured profile| ORCH
+
+  %% --- ask the gaps (loop) ---
+  ORCH -->|incomplete: ask next| TTS
+  TTS -->|audio| WA
+  WA -->|voice note| SP
+
+  %% --- decide ---
+  ORCH -->|profile complete| RULE
+  RULE -->|reads rules| SDB
+  RULE -->|verdict and reasons| ORCH
+  RULE --> LOG
+
+  %% --- answer ---
+  ORCH -->|result text| TTS
+  ORCH -->|document checklist| IMG
+  ORCH -->|voice plus document card| WA
+
+  %% --- safety net + apply ---
+  ORCH -->|user asks for help| Q
+  Q --> AGENT
+  AGENT -.-> OPD
+  ORCH -.->|apply stage only| BDB
+
+  %% --- curation (the moat) ---
+  CUR --> ING
+  ING --> REV
+  REV -->|publish new version| SDB
+
+  classDef user fill:#EAF0F6,stroke:#1E3A5F,color:#20242B;
+  classDef chan fill:#FBF1DF,stroke:#E0922F,color:#20242B;
+  classDef core fill:#EAF3EC,stroke:#2F7D4F,color:#20242B;
+  classDef ai fill:#FFFFFF,stroke:#1E3A5F,color:#20242B;
+  classDef data fill:#F4EEE2,stroke:#9B8553,color:#20242B;
+  classDef hum fill:#F6E9E5,stroke:#9B3B2E,color:#20242B;
+  classDef admin fill:#EFEAF6,stroke:#5B4B8F,color:#20242B;
+
+  class SP,OPD,FP user;
+  class WA,WEB,IVR chan;
+  class GW,ORCH,SESS core;
+  class ASR,TTS,EXT,RULE ai;
+  class SDB,RED,IMG,BDB,LOG data;
+  class Q,AGENT hum;
+  class CUR,ING,REV admin;

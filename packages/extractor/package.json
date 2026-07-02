@@ -1,0 +1,33 @@
+{
+  "name": "@urimai/extractor",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "extract:smoke": "dotenv -e ../../.env -- tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
+    "@urimai/types": "workspace:*",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "dotenv-cli": "^7.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

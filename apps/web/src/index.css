@@ -1,0 +1,13 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Noto Sans Tamil", system-ui, -apple-system, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f4f1ea;
+  color: #20242b;
+}

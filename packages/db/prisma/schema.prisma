@@ -1,0 +1,96 @@
+// Urimai data model — Phase 0 scaffold.
+//
+// Only the Scheme (the versioned rules asset) lives here for now. The rest of the
+// core data model are runtime/session shapes, not tables:
+//   - Profile  -> session state in Redis (no PII; never persisted in discovery)
+//   - Verdict  -> computed by the pure rules engine (Phase 1)
+//   - Rule / DocRef -> embedded inside a Scheme (stored as JSON below)
+//
+// Later phases add their own tables (see PROJECT_BRIEF.md §6):
+//   - Phase 6: AuditLog (immutable, every evaluation) and BeneficiaryRecord
+//     (encrypted PII, apply-stage only).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// A scheme's rules — the asset. Stored VERSIONED; thresholds are data, not code.
+/// `verified` stays false until a human signs the version off against the GO.
+model Scheme {
+  id            String   @id @default(cuid())
+  key           String // stable scheme identifier, e.g. "tn_old_age_pension"
+  version       Int      @default(1)
+
+  name          String // English
+  nameTamil     String
+  department    String
+  benefit       String // e.g. "₹1,000 / month"
+  note          String   @default("")
+  applyAt       String
+
+  // ALL criteria must pass; ANY exclusion true disqualifies. Documents are shown
+  // as pictures. Each is a JSON array of the shared Rule / DocRef shapes.
+  criteria      Json
+  exclusions    Json
+  documents     Json
+
+  effectiveFrom DateTime? // date the GO took effect (null when not yet known)
+  source        String // GO number / URL
+  verified      Boolean  @default(false) // false until a human signs off
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([key, version])
+  @@index([key])
+  @@map("schemes")
+}
+
+/// Immutable audit record — one row per scheme evaluation. Append-only; no PII (inputs are
+/// the discovery profile, which carries no identity).
+model AuditLog {
+  id          String   @id @default(cuid())
+  sessionId   String
+  channel     String?
+  schemeId    String
+  ruleVersion Int
+  status      String // eligible | need_info | not_eligible
+  reasons     Json
+  inputs      Json // profile snapshot — NO identity/PII
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+/// Apply-stage identity record — the ONLY place PII is collected, stored ENCRYPTED at rest.
+model BeneficiaryRecord {
+  id         String   @id @default(cuid())
+  sessionId  String
+  schemeId   String
+  ciphertext String // AES-256-GCM encrypted PII payload (iv:tag:data)
+  createdAt  DateTime @default(now())
+
+  @@index([sessionId])
+  @@map("beneficiary_records")
+}
+
+/// Human-safety-net escalation ticket. Contact + message are encrypted (PII).
+model Escalation {
+  id         String    @id @default(cuid())
+  fromEnc    String
+  textEnc    String
+  reason     String
+  status     String    @default("pending") // pending | resolved
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  @@index([status])
+  @@map("escalations")
+}

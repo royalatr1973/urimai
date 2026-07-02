@@ -1,0 +1,40 @@
+{
+  "name": "@urimai/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "generate": "dotenv -e ../../.env -- prisma generate",
+    "migrate": "dotenv -e ../../.env -- prisma migrate dev --name init",
+    "reset": "dotenv -e ../../.env -- prisma migrate reset --force",
+    "studio": "dotenv -e ../../.env -- prisma studio",
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "schemes:list": "dotenv -e ../../.env -- tsx src/list-schemes.ts"
+  },
+  "prisma": {
+    "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@urimai/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "dotenv-cli": "^7.4.2",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
