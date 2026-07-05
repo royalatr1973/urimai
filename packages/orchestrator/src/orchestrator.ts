@@ -33,8 +33,12 @@ export interface AuditEntry {
 export interface OrchestratorDeps {
   /** Where conversation profiles are persisted (Redis in production). */
   store: SessionStore;
-  /** Free text → Profile. Injected so the LLM call is swappable/testable. */
-  extract: (text: string) => Promise<Profile>;
+  /**
+   * Free text → Profile. Injected so the LLM call is swappable/testable.
+   * `pendingField` (when set) is the field we just asked about in the previous turn —
+   * lets the extractor resolve bare answers ("no", "50000") to the right field.
+   */
+  extract: (text: string, pendingField?: keyof Profile | null) => Promise<Profile>;
   /** Source of the in-scope schemes (the versioned DB rows at runtime). */
   loadSchemes: () => Promise<Scheme[]>;
   /** Immutable audit sink — called after EVERY evaluation. Injected; the engine stays pure. */
@@ -60,6 +64,33 @@ export type TurnResult =
 
 const DEFAULT_TTL = 60 * 60 * 24;
 const sessionKey = (id: string) => `urimai:session:${id}`;
+
+/** Persisted per session: the merged profile so far, plus the field we last asked about
+ * (so the next reply can be interpreted against it). Backwards-compatible with old
+ * sessions that stored only the Profile shape. */
+interface SessionState {
+  profile: Profile;
+  pendingField: keyof Profile | null;
+}
+
+/** Read a session blob tolerantly: accepts the new {profile, pendingField} shape and the
+ * legacy shape that was just a Profile. */
+function decodeSession(raw: string | null): SessionState {
+  const empty: SessionState = { profile: { ...EMPTY_PROFILE }, pendingField: null };
+  if (!raw) return empty;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SessionState> & Partial<Profile>;
+    if (parsed && typeof parsed === "object" && "profile" in parsed && parsed.profile) {
+      return {
+        profile: { ...EMPTY_PROFILE, ...(parsed.profile as Partial<Profile>) },
+        pendingField: (parsed.pendingField as keyof Profile | null | undefined) ?? null,
+      };
+    }
+    return { profile: { ...EMPTY_PROFILE, ...(parsed as Partial<Profile>) }, pendingField: null };
+  } catch {
+    return empty;
+  }
+}
 
 /**
  * Merge a freshly-extracted profile over the stored one: a new non-null value updates the
@@ -133,31 +164,38 @@ export function decideNext(profile: Profile, schemes: Scheme[]): TurnResult {
 export function createOrchestrator(deps: OrchestratorDeps) {
   const ttl = deps.ttlSeconds ?? DEFAULT_TTL;
 
+  async function loadState(sessionId: string): Promise<SessionState> {
+    return decodeSession(await deps.store.get(sessionKey(sessionId)));
+  }
+
+  async function saveState(sessionId: string, state: SessionState): Promise<void> {
+    await deps.store.set(sessionKey(sessionId), JSON.stringify(state), "EX", ttl);
+  }
+
+  /** Backwards-compatible profile accessor — some callers only want the profile. */
   async function loadProfile(sessionId: string): Promise<Profile> {
-    const raw = await deps.store.get(sessionKey(sessionId));
-    if (!raw) return { ...EMPTY_PROFILE };
-    try {
-      return { ...EMPTY_PROFILE, ...(JSON.parse(raw) as Partial<Profile>) };
-    } catch {
-      return { ...EMPTY_PROFILE };
-    }
+    return (await loadState(sessionId)).profile;
   }
 
   async function saveProfile(sessionId: string, profile: Profile): Promise<void> {
-    await deps.store.set(sessionKey(sessionId), JSON.stringify(profile), "EX", ttl);
+    const prev = await loadState(sessionId);
+    await saveState(sessionId, { profile, pendingField: prev.pendingField });
   }
 
   /**
    * Drive one conversation turn for a session given new normalized user text.
+   * Passes the field we last asked about to the extractor so bare answers land.
    */
   async function handleTurn(sessionId: string, text: string): Promise<TurnResult> {
-    const stored = await loadProfile(sessionId);
-    const extracted = await deps.extract(text);
-    const profile = mergeProfiles(stored, extracted);
-    await saveProfile(sessionId, profile);
+    const state = await loadState(sessionId);
+    const extracted = await deps.extract(text, state.pendingField);
+    const profile = mergeProfiles(state.profile, extracted);
 
     const schemes = await deps.loadSchemes();
     const result = decideNext(profile, schemes);
+
+    const nextPending = result.kind === "question" ? result.field : null;
+    await saveState(sessionId, { profile, pendingField: nextPending });
     await deps.audit?.({ sessionId, profile, verdicts: result.verdicts });
     return result;
   }
@@ -165,12 +203,13 @@ export function createOrchestrator(deps: OrchestratorDeps) {
   /**
    * Dashboard path (web channel): extract from new text, merge into the stored profile,
    * and return the merged profile plus ALL verdicts in one call — no next-question picker.
+   * (The web channel doesn't sequence one question at a time, so no pendingField.)
    */
   async function assess(sessionId: string, text: string): Promise<Assessment> {
-    const stored = await loadProfile(sessionId);
-    const extracted = await deps.extract(text);
-    const profile = mergeProfiles(stored, extracted);
-    await saveProfile(sessionId, profile);
+    const state = await loadState(sessionId);
+    const extracted = await deps.extract(text, null);
+    const profile = mergeProfiles(state.profile, extracted);
+    await saveState(sessionId, { profile, pendingField: null });
     const schemes = await deps.loadSchemes();
     const verdicts = evaluateProfile(profile, schemes);
     await deps.audit?.({ sessionId, profile, verdicts });
@@ -184,7 +223,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
    * engine stays on the server, so the audit trail stays complete and rules stay single-source.
    */
   async function reassess(sessionId: string, profile: Profile): Promise<Assessment> {
-    await saveProfile(sessionId, profile);
+    await saveState(sessionId, { profile, pendingField: null });
     const schemes = await deps.loadSchemes();
     const verdicts = evaluateProfile(profile, schemes);
     await deps.audit?.({ sessionId, profile, verdicts });

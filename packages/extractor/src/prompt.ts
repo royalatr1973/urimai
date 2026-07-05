@@ -49,7 +49,7 @@ Return ONLY a single JSON object — no prose, no markdown, no code fences. Use 
 - gender: transgender / திருநங்கை / "other" → "other".
 - marital_status: widow / விதவை → "widowed"; unmarried / திருமணம் ஆகவில்லை → "unmarried".
 - state: the Indian state. If the person names a Tamil Nadu district or city (e.g. Madurai, Salem, சேலம், கோயம்புத்தூர்), set state to "Tamil Nadu". Do NOT try to set residency yourself — the system derives it from state.
-- disability_percent: 0-100, only if a percentage or clear degree of disability is stated. "I can't walk" alone is NOT a percentage → null.
+- disability_percent: 0-100. A percentage or clear degree of disability → that number. A clear statement of NO disability ("I have no disability", "எனக்கு மாற்றுத்திறன் இல்லை", "not disabled") → 0. Vague symptoms without a level ("I can't walk", "eyesight is bad") → null.
 - monthly_income: the INDIVIDUAL's own monthly income in rupees, only if a personal monthly figure is stated.
 - annual_family_income: the WHOLE HOUSEHOLD's yearly income in rupees. Populate ONLY when a family-level or annual figure is actually stated. NEVER multiply an individual's monthly income by 12 to fill this — different scope, different number.
 - has_regular_income: true ONLY for a clearly steady source (salary, pension, a regular job). false ONLY when income is clearly absent (no work, no support). Daily-wage, casual, seasonal, irregular, or unclear work → null. (Destitution is ultimately assessed by a field officer; do not pre-judge it.)
@@ -67,7 +67,44 @@ Return ONLY a single JSON object — no prose, no markdown, no code fences. Use 
 
 Remember: every key present, null when unknown, JSON object only.`;
 
-/** Wrap the user's situation text into the user-turn content. */
-export function buildUserPrompt(text: string): string {
-  return `Person's words:\n"""\n${text}\n"""\n\nReturn the JSON profile object now.`;
+/**
+ * Human-readable descriptions of what each field means. Fed to the model as CONTEXT when
+ * we just asked the user about that field — so a bare answer ("no", "50000", "half acre")
+ * can be interpreted against the right target. Keeps the extractor prompt-agnostic about
+ * which field is "pending" any given turn; the orchestrator supplies that.
+ */
+const FIELD_CONTEXT: Record<string, string> = {
+  age: "the person's age in years",
+  gender: 'the person\'s gender ("male", "female", or "other" for transgender)',
+  marital_status: 'the person\'s marital status ("married", "widowed", "unmarried", or "divorced")',
+  state: "the Indian state / district / city the person lives in",
+  is_tamil_nadu: "whether the person lives in Tamil Nadu (a bare yes/no maps to true/false; a district or town name confirming Tamil Nadu should also set state)",
+  disability_percent: 'the disability percentage on the person\'s certificate. A bare "no" / "இல்லை" / "not disabled" means 0. A number is the percentage.',
+  is_family_head: "whether the person is the head of their family on the ration card",
+  income_tax_payer: "whether anyone in the family pays income tax",
+  govt_employee: "whether anyone in the family is a government employee",
+  owns_four_wheeler: "whether the family owns a four-wheeler (car, jeep, tractor)",
+  monthly_income: "the person's own monthly income in rupees",
+  fixed_assets_value: "the rupee value of the person's fixed assets / property. A bare number is that value.",
+  has_regular_income: 'whether the person has a steady regular income (salary, pension, regular job). A bare "no" means false; a bare "yes" means true. Irregular / daily-wage work stays null.',
+  annual_family_income: "the family's total income for a year in rupees",
+  land_acres_wet: "acres of wet land (நஞ்சை) the person owns. A bare number is acres.",
+  land_acres_dry: "acres of dry land (புஞ்சை) the person owns. A bare number is acres.",
+  annual_electricity_units: "annual household electricity usage in units",
+  professional_tax_payer: "whether anyone in the family pays professional tax",
+  is_pensioner: "whether anyone in the family receives a government pension",
+  psu_or_bank_employee: "whether anyone in the family works for a PSU or a bank",
+  elected_representative: "whether anyone in the family is an elected local-body representative",
+};
+
+/**
+ * Wrap the user's situation text into the user-turn content. When `pendingField` is set,
+ * we told the user we were asking about that field in the previous turn — bare answers
+ * ("no", "50000", "half acre") should be interpreted against that field's meaning.
+ */
+export function buildUserPrompt(text: string, pendingField?: string | null): string {
+  const context = pendingField && FIELD_CONTEXT[pendingField]
+    ? `\n\nContext for this reply: in the previous turn, the system asked the user about "${pendingField}" — ${FIELD_CONTEXT[pendingField]}. If this reply is a bare answer (a lone number, "yes"/"no", "இல்லை"/"ஆம்"), interpret it as an answer to that specific field. If the reply also contains other information, extract that too (still following the field rules — never guess).`
+    : "";
+  return `Person's words:\n"""\n${text}\n"""${context}\n\nReturn the JSON profile object now.`;
 }

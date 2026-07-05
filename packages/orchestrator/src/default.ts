@@ -26,7 +26,7 @@ export function createDefaultOrchestrator(opts: DefaultOrchestratorOptions = {})
 
   return createOrchestrator({
     store,
-    extract: (text) => extractProfile(text),
+    extract: (text, pendingField) => extractProfile(text, { pendingField }),
     loadSchemes: () => listLatestSchemes(),
     // Every evaluation is logged immutably, tagged with the channel.
     audit: (entry) => writeAudit({ ...entry, channel: opts.channel }),

@@ -31,6 +31,12 @@ export interface ExtractOptions {
   model?: string;
   /** Override the API key. Defaults to the ANTHROPIC_API_KEY env var. */
   apiKey?: string;
+  /**
+   * The Profile field the user was just asked about, if any. Lets the extractor
+   * resolve bare answers ("no", "50000", "half acre") to the correct field instead
+   * of dropping them as ambiguous. Set by the orchestrator per-turn from the session.
+   */
+  pendingField?: string | null;
 }
 
 const FALLBACK_MODEL = "claude-opus-4-8";
@@ -61,7 +67,7 @@ export async function extractProfile(text: string, opts: ExtractOptions = {}): P
       model,
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildUserPrompt(text) }],
+      messages: [{ role: "user", content: buildUserPrompt(text, opts.pendingField) }],
     });
 
     return parseProfile(firstText(msg));

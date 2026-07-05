@@ -46,4 +46,30 @@ describe("buildUserPrompt", () => {
     const out = buildUserPrompt("எனக்கு வயசு 67");
     expect(out).toContain("எனக்கு வயசு 67");
   });
+
+  it("without pendingField, includes no context hint", () => {
+    const out = buildUserPrompt("no");
+    expect(out.toLowerCase()).not.toContain("previous turn");
+  });
+
+  it("with pendingField, injects the field's context so bare answers land", () => {
+    const out = buildUserPrompt("no", "disability_percent");
+    expect(out.toLowerCase()).toContain("previous turn");
+    expect(out).toContain("disability_percent");
+    expect(out.toLowerCase()).toContain("bare"); // instruction to treat bare answers specially
+  });
+
+  it("unknown pendingField values are ignored (no crash, no bogus context)", () => {
+    const out = buildUserPrompt("no", "nonsense_field");
+    expect(out.toLowerCase()).not.toContain("previous turn");
+  });
+});
+
+describe("SYSTEM_PROMPT — disability nuance", () => {
+  it('treats a clear "no disability" statement as 0, not null', () => {
+    // The old prompt only extracted a percentage; a bare "no disability" was left as null,
+    // which caused the WhatsApp loop to re-ask the same question forever.
+    expect(SYSTEM_PROMPT).toMatch(/no disability|not disabled|மாற்றுத்திறன் இல்லை/);
+    expect(SYSTEM_PROMPT).toMatch(/→\s*0\b/); // must map that case to 0
+  });
 });
