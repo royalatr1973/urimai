@@ -28,12 +28,20 @@ function buildHandler(): { handler: MessageHandler | null; reason?: string } {
         : undefined,
     sarvam: env.SARVAM_API_KEY ? { apiKey: env.SARVAM_API_KEY } : undefined,
   };
+  // Speech is optional: with no ASR/TTS keys the channel runs TEXT-ONLY (Tamil text replies,
+  // "please type" nudge for voice notes) and upgrades to voice when keys are configured.
+  let speech = null;
+  try {
+    speech = createSpeechProvider(speechCfg);
+  } catch {
+    console.warn("[whatsapp] no speech provider configured — running TEXT-ONLY until Bhashini/Sarvam keys are set");
+  }
   try {
     const handler = createMessageHandler({
       // Short TTL: a shared phone serves many people, so a stale profile should age out
       // fast between beneficiaries (plus the explicit "new person" reset command).
       orchestrator: createDefaultOrchestrator({ channel: "whatsapp", ttlSeconds: 30 * 60 }),
-      speech: createSpeechProvider(speechCfg),
+      speech,
       whatsapp: new MetaWhatsAppClient({ phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID, accessToken: env.WHATSAPP_ACCESS_TOKEN }),
       transcode: transcodeOggToWav,
       loadSchemes: () => listLatestSchemes(),

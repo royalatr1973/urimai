@@ -27,7 +27,10 @@ export interface OrchestratorLike {
 
 export interface HandlerDeps {
   orchestrator: OrchestratorLike;
-  speech: SpeechProvider;
+  /** Tamil ASR/TTS. Optional: without it the channel runs TEXT-ONLY — replies are sent as
+   * Tamil text and voice notes get a polite "please type" nudge. Lets WhatsApp go live
+   * before Bhashini/Sarvam keys exist; voice switches on automatically once configured. */
+  speech: SpeechProvider | null;
   whatsapp: WhatsAppClient;
   transcode: Transcoder;
   loadSchemes: () => Promise<Scheme[]>;
@@ -43,12 +46,18 @@ const MSG = {
   unsupported: "தயவுசெய்து உங்கள் நிலையை குரல் செய்தியாக அல்லது எழுத்தாக அனுப்புங்கள்.",
   handoff: "ஒரு உதவியாளர் விரைவில் உங்களைத் தொடர்புகொள்வார்.",
   reset: "சரி, புதிதாகத் தொடங்குகிறோம். இந்த நபரின் நிலையைச் சொல்லுங்கள்.",
+  voiceNotReady: "தற்போது குரல் செய்திகளை கேட்க முடியவில்லை — தயவுசெய்து எழுத்தாக அனுப்புங்கள்.",
 };
 
 export function createMessageHandler(deps: HandlerDeps) {
   const now = deps.now ?? (() => new Date().toISOString());
 
+  /** Voice when speech is configured; Tamil text otherwise. */
   async function speak(to: string, tamil: string): Promise<void> {
+    if (!deps.speech) {
+      await deps.whatsapp.sendText(to, tamil);
+      return;
+    }
     const { audio, mimeType } = await deps.speech.synthesize(tamil, { targetLang: "ta-IN" });
     // WhatsApp voice notes are OGG/Opus; if the provider returns WAV, a production setup
     // transcodes on the way out too. We pass the provider mime through here.
@@ -59,6 +68,7 @@ export function createMessageHandler(deps: HandlerDeps) {
   async function toText(msg: InboundMessage): Promise<string | null> {
     if (msg.kind === "text") return msg.text ?? "";
     if (msg.kind === "audio" && msg.mediaId) {
+      if (!deps.speech) return null; // text-only mode: can't transcribe yet
       const ogg = await deps.whatsapp.downloadMedia(msg.mediaId);
       const wav = await deps.transcode(ogg);
       return deps.speech.transcribe(wav, { sourceLang: "ta-IN" });
@@ -69,7 +79,8 @@ export function createMessageHandler(deps: HandlerDeps) {
   async function handleInbound(msg: InboundMessage): Promise<void> {
     const text = await toText(msg);
     if (text === null) {
-      await deps.whatsapp.sendText(msg.from, MSG.unsupported);
+      const nudge = msg.kind === "audio" && !deps.speech ? MSG.voiceNotReady : MSG.unsupported;
+      await deps.whatsapp.sendText(msg.from, nudge);
       return;
     }
 

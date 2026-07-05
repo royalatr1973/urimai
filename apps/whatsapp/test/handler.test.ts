@@ -122,3 +122,32 @@ describe("WhatsApp handler", () => {
     expect(orchestrator.handleTurn).not.toHaveBeenCalled();
   });
 });
+
+describe("text-only mode (no speech provider configured)", () => {
+  it("text in → orchestrates and replies with Tamil TEXT, not audio", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "question",
+      field: "age",
+      question: { en: "Age?", ta: "உங்கள் வயது என்ன?" },
+      verdicts: [],
+      profile: {} as never,
+    });
+    const h = createMessageHandler({ ...deps, speech: null });
+    await h.handleInbound({ from: "9199", kind: "text", text: "வணக்கம், விதவை" });
+
+    expect(orchestrator.handleTurn).toHaveBeenCalledWith("wa:9199", "வணக்கம், விதவை");
+    expect(whatsapp.sendText).toHaveBeenCalledWith("9199", "உங்கள் வயது என்ன?");
+    expect(whatsapp.sendAudio).not.toHaveBeenCalled();
+  });
+
+  it("voice note in → polite 'please type' nudge, no crash, no orchestration", async () => {
+    const { deps, whatsapp, orchestrator, transcode } = baseDeps();
+    const h = createMessageHandler({ ...deps, speech: null });
+    await h.handleInbound({ from: "9199", kind: "audio", mediaId: "M1" });
+
+    expect(whatsapp.sendText).toHaveBeenCalledOnce();
+    expect(transcode).not.toHaveBeenCalled();
+    expect(orchestrator.handleTurn).not.toHaveBeenCalled();
+  });
+});
