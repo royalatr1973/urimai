@@ -1,14 +1,28 @@
 /**
- * Canonical seed data for the four launch schemes (curator-verified).
+ * Canonical seed data for the six launch schemes (curator-verified July 2026).
+ *
+ * Source: TN Social Security Schemes document supplied by the curator (July 2026),
+ * summarising KMUT (kmut.tn.gov.in), CRA (cra.tn.gov.in), central IGNOAPS/IGNWPS/IGNDPS
+ * and myScheme.gov.in. Verified: true per the curator's line-by-line sign-off.
  *
  * Single source of truth in the domain `Scheme` shape: the Prisma seeder writes these
  * into Postgres, and tests can import them to evaluate against the REAL sourced rules
- * without a database. At runtime the app still loads schemes from the DB (the rules are
- * data, not code) — this constant is the seed input, not the runtime read path.
+ * without a database. At runtime the app still loads schemes from the DB — this constant
+ * is the seed input, not the runtime read path.
  *
- * ⚠️  All thresholds are curator-verified placeholders pending exact GO numbers — see the
- *     "Confirm before production" items tracked in each scheme's comments. verified: true
- *     reflects the curator's sign-off.
+ * KMUT changes (July 2026): the "head of family" requirement is now an OR — the applicant
+ * is eligible if she is EITHER the ration-card head OR a married woman (i.e. wife of a
+ * male head). Encoded with the new "any" operator on the rules engine.
+ *
+ * Old Age Pension (July 2026): now requires BPL. The earlier fixed-assets ≤ ₹50,000 gate
+ * has been removed — the document treats it as the combined IGNOAPS + state scheme.
+ *
+ * DAPS (July 2026): adds an annual_family_income ≤ ₹3 lakh cap and drops the fixed-assets
+ * gate — the document doesn't cite it for DAPS.
+ *
+ * IGNWPS and IGNDPS are new central-scheme entries (widow 40-60 + BPL, and 80%+ disability
+ * + BPL respectively). The "one pension at a time" rule is surfaced in the reply text,
+ * not as an exclusion — the citizen sees all their options and picks with the officer.
  */
 import type { DocRef, Scheme } from "@urimai/types";
 
@@ -23,105 +37,178 @@ const DOCS = {
   income_cert: { id: "income_cert", nameTamil: "வருமான / ஆதரவற்ற சான்று", nameEnglish: "Income / destitution certificate", imageAssetId: img("income_cert"), whereToGet: "Taluk office" },
   death_cert: { id: "death_cert", nameTamil: "கணவர் இறப்பு சான்றிதழ்", nameEnglish: "Husband's death certificate", imageAssetId: img("death_cert"), whereToGet: "Local body / e-Sevai" },
   disability_cert: { id: "disability_cert", nameTamil: "மாற்றுத்திறன் சான்றிதழ் (UDID)", nameEnglish: "Disability certificate (UDID)", imageAssetId: img("disability_cert"), whereToGet: "Govt hospital / UDID portal" },
+  voter_id: { id: "voter_id", nameTamil: "வாக்காளர் அடையாள அட்டை", nameEnglish: "Voter ID card", imageAssetId: img("voter_id"), whereToGet: "Electoral office" },
+  bpl_card: { id: "bpl_card", nameTamil: "BPL அட்டை", nameEnglish: "BPL card / number", imageAssetId: img("bpl_card"), whereToGet: "Corporation office (urban) / BDO or panchayat (rural)" },
+  destitute_widow_cert: { id: "destitute_widow_cert", nameTamil: "ஆதரவற்ற விதவை சான்றிதழ்", nameEnglish: "Destitute Widow Certificate (REV-109)", imageAssetId: img("destitute_widow_cert"), whereToGet: "Revenue Department" },
 } satisfies Record<string, DocRef>;
 
+const SRC = "TN Social Security Schemes document (curator, July 2026)";
+
 export const SEED_SCHEMES: Scheme[] = [
+  // 1 ──────────────────────────────────────────────────────────────────────
   {
     id: "kmut",
     name: "Kalaignar Magalir Urimai Thogai",
     nameTamil: "கலைஞர் மகளிர் உரிமைத் தொகை",
     department: "Special Programme Implementation",
     benefit: "₹1,000 / month",
-    note: "Monthly entitlement for the woman/transgender head of an eligible family. One per ration card.",
-    applyAt: "e-Sevai centre, ration shop, or an UngaLudan Stalin camp",
-    version: 1,
+    note: "Monthly entitlement for the woman/transgender head of an eligible family. Married women qualify as wives of the male head; widowed/unmarried women must themselves be the head. One woman per ration card (enforced at apply-stage).",
+    applyAt: "kmut.tn.gov.in, e-Sevai centre, or UngaLudan Stalin camp",
+    version: 2,
     effectiveFrom: "2023-09-15",
-    source: "kmut.tn.gov.in; KMUT operational guidelines (SPI Dept)",
+    source: SRC,
     verified: true,
     criteria: [
-      { field: "gender", op: "in", value: ["female", "other"], label: "Woman or transgender applicant", source: "kmut.tn.gov.in" },
-      { field: "age", op: "gte", value: 21, label: "Aged 21 or above", source: "KMUT operational guidelines" },
-      { field: "is_family_head", op: "true", label: "Head of family on the ration card", source: "kmut.tn.gov.in" },
-      { field: "is_tamil_nadu", op: "true", label: "Permanent resident of Tamil Nadu", source: "kmut.tn.gov.in" },
-      { field: "annual_family_income", op: "lt", value: 250000, label: "Annual family income below ₹2.5 lakh", source: "KMUT operational guidelines" },
+      { op: "in", field: "gender", value: ["female", "other"], label: "Woman or transgender applicant", source: SRC },
+      { op: "gte", field: "age", value: 21, label: "Aged 21 or above", source: SRC },
+      { op: "true", field: "is_tamil_nadu", label: "Permanent resident of Tamil Nadu", source: SRC },
+      { op: "lt", field: "annual_family_income", value: 250000, label: "Annual family income below ₹2.5 lakh", source: SRC },
+      // OR: the applicant is a married woman (wife of the male ration-card head) OR she is
+      // herself the recognised head. Widowed/unmarried women must be heads.
+      {
+        op: "any",
+        label: "Head of family, or a married woman (wife of head)",
+        source: SRC,
+        rules: [
+          { op: "eq", field: "marital_status", value: "married", label: "Married woman (wife of head)", source: SRC },
+          { op: "true", field: "is_family_head", label: "Head of family on the ration card", source: SRC },
+        ],
+      },
     ],
     exclusions: [
-      { field: "land_acres_wet", op: "gt", value: 5, label: "Wetland holding above 5 acres", source: "KMUT operational guidelines" },
-      { field: "land_acres_dry", op: "gt", value: 10, label: "Dryland holding above 10 acres", source: "KMUT operational guidelines" },
-      { field: "annual_electricity_units", op: "gte", value: 3600, label: "Annual household electricity 3,600 units or more", source: "KMUT operational guidelines" },
-      { field: "income_tax_payer", op: "true", label: "Income-tax payer in family", source: "KMUT operational guidelines" },
-      { field: "professional_tax_payer", op: "true", label: "Professional-tax payer in family", source: "KMUT operational guidelines" },
-      { field: "govt_employee", op: "true", label: "Govt employee in family", source: "KMUT operational guidelines" },
-      { field: "psu_or_bank_employee", op: "true", label: "PSU or bank employee in family", source: "KMUT operational guidelines" },
-      { field: "is_pensioner", op: "true", label: "Government pensioner in family", source: "KMUT operational guidelines" },
-      { field: "elected_representative", op: "true", label: "Elected local-body representative in family", source: "KMUT operational guidelines" },
-      { field: "owns_four_wheeler", op: "true", label: "Owns a four-wheeler (car/jeep/tractor/heavy vehicle)", source: "KMUT operational guidelines" },
+      { op: "gt", field: "land_acres_wet", value: 5, label: "Wetland holding above 5 acres", source: SRC },
+      { op: "gt", field: "land_acres_dry", value: 10, label: "Dryland holding above 10 acres", source: SRC },
+      { op: "gte", field: "annual_electricity_units", value: 3600, label: "Annual household electricity 3,600 units or more", source: SRC },
+      { op: "true", field: "income_tax_payer", label: "Income-tax payer in family", source: SRC },
+      { op: "true", field: "professional_tax_payer", label: "Professional-tax payer in family", source: SRC },
+      { op: "true", field: "govt_employee", label: "Govt employee in family", source: SRC },
+      { op: "true", field: "psu_or_bank_employee", label: "PSU or bank employee in family", source: SRC },
+      { op: "true", field: "is_pensioner", label: "Government pensioner in family", source: SRC },
+      { op: "true", field: "elected_representative", label: "Elected local-body representative in family", source: SRC },
+      { op: "true", field: "owns_four_wheeler", label: "Owns a four-wheeler (car/jeep/tractor/heavy vehicle)", source: SRC },
     ],
     documents: [DOCS.ration_card, DOCS.aadhaar, DOCS.bank_passbook, DOCS.residence_proof],
   },
+
+  // 2 ──────────────────────────────────────────────────────────────────────
   {
     id: "oldage",
-    name: "Old Age Pension (TN state — destitute)",
+    name: "Old Age Pension (IGNOAPS + TN state)",
     nameTamil: "முதியோர் ஓய்வூதியம்",
-    department: "Social Welfare & Women Empowerment / Revenue (CRA)",
+    department: "Revenue (CRA) / Social Welfare",
     benefit: "₹1,000 / month",
-    note: "Pension for destitute senior citizens with no regular means of support.",
+    note: "Pension for destitute senior citizens in BPL families. Value of a free house given under a government scheme is not counted.",
     applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
-    version: 1,
+    version: 2,
     effectiveFrom: null,
-    source: "cra.tn.gov.in; district .nic.in social-security pages",
+    source: SRC,
     verified: true,
     criteria: [
-      { field: "age", op: "gte", value: 60, label: "Aged 60 or above", source: "cra.tn.gov.in" },
-      { field: "has_regular_income", op: "false", label: "Destitute — no regular source of income (assessed at application)", source: "cra.tn.gov.in" },
-      { field: "fixed_assets_value", op: "lte", value: 50000, label: "Fixed assets ₹50,000 or below", source: "district social-security pages (.nic.in)" },
-      { field: "is_tamil_nadu", op: "true", label: "Resident of Tamil Nadu", source: "cra.tn.gov.in" },
+      { op: "gte", field: "age", value: 60, label: "Aged 60 or above", source: SRC },
+      { op: "false", field: "has_regular_income", label: "Destitute — no regular source of income (assessed at application)", source: SRC },
+      { op: "true", field: "is_bpl", label: "Below Poverty Line (BPL) family", source: SRC },
+      { op: "true", field: "is_tamil_nadu", label: "Resident of Tamil Nadu", source: SRC },
     ],
     exclusions: [],
-    documents: [DOCS.aadhaar, DOCS.age_proof, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert],
+    documents: [DOCS.aadhaar, DOCS.age_proof, DOCS.ration_card, DOCS.bank_passbook, DOCS.voter_id, DOCS.bpl_card],
   },
+
+  // 3 ──────────────────────────────────────────────────────────────────────
   {
     id: "widow",
-    name: "Destitute Widow Pension (TN state)",
+    name: "Destitute Widow Pension (DWPS — TN state)",
     nameTamil: "ஆதரவற்ற விதவை ஓய்வூதியம்",
-    department: "Social Welfare & Women Empowerment / Revenue (CRA)",
+    department: "Revenue (CRA) / Social Welfare",
     benefit: "₹1,000 / month",
-    note: "Pension for destitute widows with no sufficient means of support.",
-    applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
-    version: 1,
+    note: "Pension for destitute widows in Tamil Nadu (18+). Widows aged 60+ should apply for Old Age Pension instead; widows 40-60 in BPL families may also apply for central IGNWPS.",
+    applyAt: "TNeGA e-Sevai (REV-202) / e-Sevai Maiyam / CSC",
+    version: 2,
     effectiveFrom: null,
-    source: "cra.tn.gov.in; TN pension scheme details",
+    source: SRC,
     verified: true,
     criteria: [
-      { field: "gender", op: "eq", value: "female", label: "Applicant is a woman", source: "cra.tn.gov.in" },
-      { field: "marital_status", op: "eq", value: "widowed", label: "Widowed", source: "cra.tn.gov.in" },
-      { field: "age", op: "gte", value: 18, label: "Attained widowhood at 18 or above", source: "TN pension scheme details" },
-      { field: "has_regular_income", op: "false", label: "Destitute — no regular source of income (assessed at application)", source: "cra.tn.gov.in" },
-      { field: "fixed_assets_value", op: "lte", value: 50000, label: "Fixed assets ₹50,000 or below", source: "TN pension scheme details" },
-      { field: "is_tamil_nadu", op: "true", label: "Resident of Tamil Nadu", source: "cra.tn.gov.in" },
+      { op: "eq", field: "gender", value: "female", label: "Applicant is a woman", source: SRC },
+      { op: "eq", field: "marital_status", value: "widowed", label: "Widowed (not remarried)", source: SRC },
+      { op: "gte", field: "age", value: 18, label: "Aged 18 or above", source: SRC },
+      { op: "false", field: "has_regular_income", label: "Destitute — no adequate means of livelihood (assessed at application)", source: SRC },
+      { op: "lte", field: "fixed_assets_value", value: 50000, label: "Fixed assets ₹50,000 or below", source: SRC },
+      { op: "true", field: "is_tamil_nadu", label: "Resident of Tamil Nadu", source: SRC },
     ],
     exclusions: [],
-    documents: [DOCS.death_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert],
+    documents: [DOCS.death_cert, DOCS.destitute_widow_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert, DOCS.voter_id],
   },
+
+  // 4 ──────────────────────────────────────────────────────────────────────
   {
     id: "disabled",
-    name: "Differently Abled Pension (TN state — DAPS)",
+    name: "Differently Abled Pension (DAPS — TN state)",
     nameTamil: "மாற்றுத்திறனாளி ஓய்வூதியம்",
-    department: "Welfare of Differently Abled / Revenue (CRA)",
+    department: "Revenue (CRA) / Welfare of Differently Abled",
     benefit: "₹1,000 / month",
-    note: "Pension for unemployed persons with disability and limited means.",
+    note: "Pension for unemployed persons with 40%+ disability and family income ≤ ₹3 lakh. Requires UDID / disability passbook. Persons with 80%+ disability in BPL families may also apply for central IGNDPS.",
+    applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
+    version: 2,
+    effectiveFrom: null,
+    source: SRC,
+    verified: true,
+    criteria: [
+      { op: "gte", field: "disability_percent", value: 40, label: "Disability of 40% or more", source: SRC },
+      { op: "false", field: "has_regular_income", label: "Unemployed / no regular source of income", source: SRC },
+      { op: "lte", field: "annual_family_income", value: 300000, label: "Annual family income ₹3 lakh or below", source: SRC },
+      { op: "true", field: "is_tamil_nadu", label: "Resident of Tamil Nadu", source: SRC },
+    ],
+    exclusions: [],
+    documents: [DOCS.disability_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert, DOCS.voter_id],
+  },
+
+  // 5 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "ignwps",
+    name: "Indira Gandhi National Widow Pension Scheme (IGNWPS)",
+    nameTamil: "இந்திரா காந்தி தேசிய விதவை ஓய்வூதியத் திட்டம்",
+    department: "Central scheme (delivered via Revenue / CRA in TN)",
+    benefit: "₹1,000 / month",
+    note: "Central-scheme widow pension for widows aged 40-60 in BPL families. Delivered alongside state DWPS in Tamil Nadu.",
     applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
     version: 1,
     effectiveFrom: null,
-    source: "cra.tn.gov.in; TN pension scheme details",
+    source: SRC,
     verified: true,
     criteria: [
-      { field: "disability_percent", op: "gte", value: 40, label: "Disability of 40% or more", source: "TN pension scheme details" },
-      { field: "has_regular_income", op: "false", label: "Unemployed / no regular source of income (assessed at application)", source: "cra.tn.gov.in" },
-      { field: "fixed_assets_value", op: "lte", value: 50000, label: "Fixed assets ₹50,000 or below", source: "TN pension scheme details" },
-      { field: "is_tamil_nadu", op: "true", label: "Resident of Tamil Nadu", source: "cra.tn.gov.in" },
+      { op: "eq", field: "gender", value: "female", label: "Applicant is a woman", source: SRC },
+      { op: "eq", field: "marital_status", value: "widowed", label: "Widowed (not remarried)", source: SRC },
+      { op: "gte", field: "age", value: 40, label: "Aged 40 or above", source: SRC },
+      { op: "lte", field: "age", value: 59, label: "Aged 59 or below (age 60+ apply for Old Age)", source: SRC },
+      { op: "true", field: "is_bpl", label: "Below Poverty Line (BPL) family", source: SRC },
+      { op: "false", field: "has_regular_income", label: "Destitute — no adequate means of livelihood", source: SRC },
+      { op: "lte", field: "fixed_assets_value", value: 50000, label: "Fixed assets ₹50,000 or below", source: SRC },
+      { op: "true", field: "is_tamil_nadu", label: "Resident of Tamil Nadu", source: SRC },
     ],
     exclusions: [],
-    documents: [DOCS.disability_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert],
+    documents: [DOCS.death_cert, DOCS.destitute_widow_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert, DOCS.voter_id, DOCS.bpl_card],
+  },
+
+  // 6 ──────────────────────────────────────────────────────────────────────
+  {
+    id: "igndps",
+    name: "Indira Gandhi National Disability Pension Scheme (IGNDPS)",
+    nameTamil: "இந்திரா காந்தி தேசிய மாற்றுத்திறனாளி ஓய்வூதியத் திட்டம்",
+    department: "Central scheme (delivered via Revenue / CRA in TN)",
+    benefit: "₹1,000 / month",
+    note: "Central-scheme disability pension for persons with 80%+ disability in BPL families. Delivered alongside state DAPS in Tamil Nadu.",
+    applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
+    version: 1,
+    effectiveFrom: null,
+    source: SRC,
+    verified: true,
+    criteria: [
+      { op: "gte", field: "disability_percent", value: 80, label: "Disability of 80% or more", source: SRC },
+      { op: "false", field: "has_regular_income", label: "Unemployed / no regular source of income", source: SRC },
+      { op: "lte", field: "annual_family_income", value: 300000, label: "Annual family income ₹3 lakh or below", source: SRC },
+      { op: "true", field: "is_bpl", label: "Below Poverty Line (BPL) family", source: SRC },
+      { op: "true", field: "is_tamil_nadu", label: "Resident of Tamil Nadu", source: SRC },
+    ],
+    exclusions: [],
+    documents: [DOCS.disability_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert, DOCS.voter_id, DOCS.bpl_card],
   },
 ];

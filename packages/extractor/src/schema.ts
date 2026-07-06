@@ -120,6 +120,7 @@ function coerceFields(obj: Record<string, unknown>): Profile {
     is_pensioner: toBoolean(obj.is_pensioner),
     psu_or_bank_employee: toBoolean(obj.psu_or_bank_employee),
     elected_representative: toBoolean(obj.elected_representative),
+    is_bpl: toBoolean(obj.is_bpl),
   };
 }
 

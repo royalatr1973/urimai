@@ -41,7 +41,8 @@ Return ONLY a single JSON object — no prose, no markdown, no code fences. Use 
   "professional_tax_payer": boolean | null,
   "is_pensioner": boolean | null,
   "psu_or_bank_employee": boolean | null,
-  "elected_representative": boolean | null
+  "elected_representative": boolean | null,
+  "is_bpl": boolean | null
 }
 
 # FIELD RULES
@@ -57,6 +58,7 @@ Return ONLY a single JSON object — no prose, no markdown, no code fences. Use 
 - land_acres_wet / land_acres_dry: Tamil நஞ்சை = WET land (land_acres_wet); புஞ்சை = DRY land (land_acres_dry). English "wet land" / "dry land" likewise. Plain "land" / "நிலம்" with no wet/dry type stated → leave BOTH null; never assign land to one side without the type.
 - is_family_head: true if the person says they head/run the family or are the head on the ration card.
 - Boolean disqualifier flags (income_tax_payer, govt_employee, owns_four_wheeler, professional_tax_payer, is_pensioner, psu_or_bank_employee, elected_representative): true/false only when clearly stated; otherwise null.
+- is_bpl: true if the person clearly states they have a Below Poverty Line card / BPL number / வறுமைக் கோடு அட்டை. false if they clearly say they do NOT have one. Anything unclear → null. (A pink ration card is often BPL in TN, but do NOT infer from ration card colour alone — only from what the person actually says about BPL.)
 
 # WORKED EXAMPLES (showing the subtle traps)
 - "தினக்கூலி வேலை, சில நாள் இருக்கும் சில நாள் இல்ல" (daily-wage work, some days yes some days no) → has_regular_income: null  (NOT true — daily-wage/irregular work is not a steady source).
@@ -64,6 +66,8 @@ Return ONLY a single JSON object — no prose, no markdown, no code fences. Use 
 - "அரை ஏக்கர் நஞ்சை நிலம்" (half acre of wet land) → land_acres_wet: 0.5, land_acres_dry: null.
 - "எனக்கு வயசு 67, விதவை, மதுரையில் இருக்கேன்" → age: 67, marital_status: "widowed", gender: "female", state: "Tamil Nadu".
 - "I have a government job" → govt_employee: true.
+- "எங்களுக்கு BPL அட்டை இருக்கு" (we have a BPL card) → is_bpl: true.
+- "எனக்கு ரேஷன் கார்டு இருக்கு" (I have a ration card) → is_bpl: null (a ration card is not automatically BPL).
 
 Remember: every key present, null when unknown, JSON object only.`;
 
@@ -95,6 +99,7 @@ const FIELD_CONTEXT: Record<string, string> = {
   is_pensioner: "whether anyone in the family receives a government pension",
   psu_or_bank_employee: "whether anyone in the family works for a PSU or a bank",
   elected_representative: "whether anyone in the family is an elected local-body representative",
+  is_bpl: 'whether the person has a Below Poverty Line (BPL) card. A bare "yes"/"ஆம்" means true; "no"/"இல்லை" means false. Do not infer BPL status from ration card ownership alone.',
 };
 
 /**

@@ -44,22 +44,48 @@ export type Profile = {
   is_pensioner: boolean | null;
   psu_or_bank_employee: boolean | null;
   elected_representative: boolean | null;
+
+  // --- Below Poverty Line status ---
+  // Required for state Old Age Pension, central IGNWPS (widow 40-60), and IGNDPS (80%+
+  // disability). BPL status is issued by the local corporation (urban) or BDO / panchayat
+  // office (rural). Boolean answer suffices for eligibility; the certificate itself is
+  // collected at apply-stage.
+  is_bpl: boolean | null;
 };
 
 /**
- * Comparison operators a rule can express.
+ * Operators available on a single-field rule.
  * For "in", `value` is an array and the rule passes if the field value ∈ value.
  */
-export type RuleOp = "eq" | "gte" | "lte" | "gt" | "lt" | "true" | "false" | "in";
+export type FieldOp = "eq" | "gte" | "lte" | "gt" | "lt" | "true" | "false" | "in";
 
-/** One eligibility condition, evaluated against a single Profile field. */
-export type Rule = {
+/** Every operator a rule can have — field ops plus the "any" combinator below. */
+export type RuleOp = FieldOp | "any";
+
+/** A single-field condition — the workhorse rule shape. */
+export type FieldRule = {
+  op: FieldOp;
   field: keyof Profile;
-  op: RuleOp;
   value?: string | number | boolean | Array<string | number>;
-  label: string; // human-readable reason, used in voice + UI
-  source?: string; // GO citation for this specific threshold
+  label: string;
+  source?: string;
 };
+
+/**
+ * An OR-of-criteria rule: passes if ANY of its sub-rules pass. Introduced for KMUT's
+ * "married OR is_family_head" clause per the July-2026 curator verification against the
+ * TN social-security document — the ration-card female head OR the wife of a male head
+ * both qualify. Kept intentionally shallow (sub-rules are field rules, not nested any).
+ */
+export type AnyRule = {
+  op: "any";
+  rules: FieldRule[];
+  label: string;
+  source?: string;
+};
+
+/** One eligibility condition. Discriminated by `op`. */
+export type Rule = FieldRule | AnyRule;
 
 /** A document shown as a picture and walked through by voice. */
 export type DocRef = {
@@ -120,4 +146,5 @@ export const EMPTY_PROFILE: Profile = {
   is_pensioner: null,
   psu_or_bank_employee: null,
   elected_representative: null,
+  is_bpl: null,
 };

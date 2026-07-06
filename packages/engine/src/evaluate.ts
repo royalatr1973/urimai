@@ -13,8 +13,13 @@
  *
  * Definitive disqualification (1, 2) takes precedence over need_info (3): if the person
  * is already ruled out by a known fact, we don't keep asking questions.
+ *
+ * The "any" operator (added July 2026 for KMUT's married-OR-head clause) evaluates a
+ * group of field sub-rules and is TRUE if any sub-rule is TRUE, FALSE if all sub-rules
+ * are FALSE, and UNKNOWN otherwise. Missing fields from all-not-yet-true sub-rules are
+ * contributed to the top-level missingFields list.
  */
-import type { Profile, Rule, Scheme, Verdict } from "@urimai/types";
+import type { AnyRule, FieldRule, Profile, Rule, Scheme, Verdict } from "@urimai/types";
 
 /** Whether a rule's condition holds, given what we currently know. */
 type RuleState = "true" | "false" | "unknown";
@@ -25,12 +30,12 @@ function isUnknown(value: Profile[keyof Profile]): boolean {
 }
 
 /**
- * Evaluate a single rule's condition against the profile.
+ * Evaluate a single-field rule's condition against the profile.
  * Returns "unknown" when the field is not yet known. Throws on a malformed rule
  * (e.g. a numeric comparison whose value isn't a number) — bad rule DATA should fail
  * loudly in curation/tests, never silently mis-decide a welfare verdict.
  */
-function ruleState(rule: Rule, profile: Profile): RuleState {
+function fieldRuleState(rule: FieldRule, profile: Profile): RuleState {
   const value = profile[rule.field];
   if (isUnknown(value)) return "unknown";
 
@@ -82,6 +87,42 @@ function ruleState(rule: Rule, profile: Profile): RuleState {
 }
 
 /**
+ * Evaluate an "any"-of-criteria rule. TRUE if any sub-rule is TRUE (short-circuit),
+ * FALSE if all sub-rules are FALSE, else UNKNOWN (still resolvable with more info).
+ */
+function anyRuleState(rule: AnyRule, profile: Profile): RuleState {
+  if (rule.rules.length === 0) {
+    throw new Error(`Malformed rule: op "any" requires at least one sub-rule (label: "${rule.label}")`);
+  }
+  let sawUnknown = false;
+  for (const sub of rule.rules) {
+    const s = fieldRuleState(sub, profile);
+    if (s === "true") return "true";
+    if (s === "unknown") sawUnknown = true;
+  }
+  return sawUnknown ? "unknown" : "false";
+}
+
+function ruleState(rule: Rule, profile: Profile): RuleState {
+  return rule.op === "any" ? anyRuleState(rule, profile) : fieldRuleState(rule, profile);
+}
+
+/**
+ * Fields that a rule DEPENDS ON — used to populate missingFields when the rule is unknown.
+ * For an "any" rule, contribute only the fields of the sub-rules that are currently UNKNOWN.
+ * A known-false sub-rule can never flip (its input is already known), so re-asking would be
+ * a dead-end question; a known-true sub-rule already short-circuited us to TRUE.
+ */
+function dependencyFields(rule: Rule, profile: Profile): (keyof Profile)[] {
+  if (rule.op !== "any") return [rule.field];
+  const out: (keyof Profile)[] = [];
+  for (const sub of rule.rules) {
+    if (fieldRuleState(sub, profile) === "unknown") out.push(sub.field);
+  }
+  return out;
+}
+
+/**
  * Evaluate one profile against one scheme. Pure and deterministic.
  */
 export function evaluate(profile: Profile, scheme: Scheme): Verdict {
@@ -93,9 +134,11 @@ export function evaluate(profile: Profile, scheme: Scheme): Verdict {
   const seenMissing = new Set<keyof Profile>();
 
   const noteMissing = (rule: Rule): void => {
-    if (!seenMissing.has(rule.field)) {
-      seenMissing.add(rule.field);
-      missingFields.push(rule.field);
+    for (const field of dependencyFields(rule, profile)) {
+      if (!seenMissing.has(field)) {
+        seenMissing.add(field);
+        missingFields.push(field);
+      }
     }
     missingLabels.push(rule.label);
   };

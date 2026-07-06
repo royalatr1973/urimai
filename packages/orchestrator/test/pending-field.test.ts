@@ -63,6 +63,10 @@ describe("pending-field context — bare answers land on the right field", () =>
           is_tamil_nadu: true,
           has_regular_income: false,
           fixed_assets_value: 10000,
+          // Set is_bpl false so oldage/igndps are decided (not eligible) and don't compete
+          // with disability_percent for the "next question" slot.
+          is_bpl: false,
+          annual_family_income: 50000,
         });
       }
       // With pendingField hint, bare "no" resolves to 0% disability.
@@ -77,11 +81,13 @@ describe("pending-field context — bare answers land on the right field", () =>
     });
 
     const session = "wa:widow";
-    const r1 = await orch.handleTurn(session, "67 widow destitute madurai no assets");
+    const r1 = await orch.handleTurn(session, "67 widow destitute madurai no assets no bpl 50k income");
     expect(r1.kind).toBe("question");
     if (r1.kind !== "question") throw new Error("unreachable");
-    // With widow/oldage already eligible and disabled + kmut unresolved, the highest-priority
-    // gap by FIELD_PRIORITY is disability_percent.
+    // Widow eligible; oldage NOT eligible (no BPL); kmut needs is_family_head; disabled needs
+    // disability_percent; IGNWPS not_eligible (age); IGNDPS not_eligible (no BPL).
+    // is_family_head and disability_percent both count 1. By FIELD_PRIORITY, disability_percent
+    // (position 7) beats is_family_head (position 8).
     expect(r1.field).toBe("disability_percent");
 
     // Bare "no" — without pendingField this would drop and re-ask; with it, disability_percent

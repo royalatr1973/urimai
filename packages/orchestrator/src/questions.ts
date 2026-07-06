@@ -35,6 +35,7 @@ export const QUESTIONS: Record<keyof Profile, Question> = {
   is_pensioner: { en: "Does anyone in your family receive a government pension?", ta: "உங்கள் குடும்பத்தில் யாராவது அரசு ஓய்வூதியம் பெறுகிறார்களா?" },
   psu_or_bank_employee: { en: "Is anyone in your family employed by a PSU or a bank?", ta: "உங்கள் குடும்பத்தில் யாராவது பொதுத்துறை நிறுவனம் அல்லது வங்கியில் பணிபுரிகிறார்களா?" },
   elected_representative: { en: "Is anyone in your family an elected local-body representative?", ta: "உங்கள் குடும்பத்தில் யாராவது தேர்ந்தெடுக்கப்பட்ட உள்ளாட்சி பிரதிநிதியா?" },
+  is_bpl: { en: "Do you have a BPL (Below Poverty Line) card?", ta: "உங்களிடம் வறுமைக் கோட்டுக்கு கீழ் உள்ள (BPL) அட்டை உள்ளதா?" },
 };
 
 /**
@@ -49,6 +50,7 @@ export const FIELD_PRIORITY: (keyof Profile)[] = [
   "gender",
   "marital_status",
   "has_regular_income",
+  "is_bpl",
   "fixed_assets_value",
   "disability_percent",
   "is_family_head",

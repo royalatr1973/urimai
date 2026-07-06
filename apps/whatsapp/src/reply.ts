@@ -27,6 +27,14 @@ export function buildResultsSummaryTamil(
       `நீங்கள் ${eligible.map((v) => name(v.schemeId)).join(", ")} திட்டத்திற்கு தகுதி பெறக்கூடும் என்று தோன்றுகிறது. இறுதி முடிவு அரசு அதிகாரிதான் எடுப்பார்.`,
     );
     parts.push("தேவையான ஆவணங்களை படத்தில் காட்டியுள்ளேன்.");
+    // ONE-PENSION-AT-A-TIME rule: a citizen may draw only one social security pension.
+    // Fire the hint only when 2+ schemes come back eligible — no need to nag when there's
+    // only one option anyway.
+    if (eligible.length >= 2) {
+      parts.push(
+        "பொதுவாக, ஒரு நேரத்தில் ஒரே ஓய்வூதியம் மட்டுமே பெற முடியும். உங்களுக்கு பொருத்தமான திட்டத்தை தேர்ந்தெடுக்க அரசு அதிகாரியிடம் ஆலோசிக்கவும்.",
+      );
+    }
   } else {
     parts.push("தற்போதைய தகவலின் படி, நீங்கள் எந்த திட்டத்திற்கும் தகுதி பெறவில்லை.");
   }

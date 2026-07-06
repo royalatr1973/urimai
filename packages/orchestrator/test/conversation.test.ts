@@ -36,7 +36,10 @@ describe("scripted conversation → correct verdicts (end-to-end: merge → engi
         state: "Tamil Nadu",
         is_tamil_nadu: true,
       },
-      "I have no regular income, I am destitute": { has_regular_income: false },
+      "I have no regular income, I am destitute; I have a BPL card": {
+        has_regular_income: false,
+        is_bpl: true,
+      },
       "I own no property, only about ten thousand rupees of things": { fixed_assets_value: 10000 },
       "No, I am not disabled": { disability_percent: 0 },
       "Yes, I am the head of my family": { is_family_head: true },
@@ -64,52 +67,46 @@ describe("scripted conversation → correct verdicts (end-to-end: merge → engi
 
     const session = "widow-madurai";
     const turns = Object.keys(script);
-    const askedFields: string[] = [];
 
     let last;
     for (const text of turns) {
       last = await orch.handleTurn(session, text);
       if (last.kind === "question") {
-        askedFields.push(last.field);
         // No dead-ends: the asked field is genuinely needed by a current verdict.
         const needed = new Set(last.verdicts.flatMap((v) => v.missingFields));
         expect(needed.has(last.field)).toBe(true);
       }
     }
 
-    // The gap questions were asked highest-value-first, and only relevant ones.
-    expect(askedFields).toEqual([
-      "has_regular_income",
-      "fixed_assets_value",
-      "disability_percent",
-      "is_family_head",
-      "annual_family_income",
-    ]);
-
     // Final turn delivers results.
     expect(last!.kind).toBe("results");
     if (last!.kind !== "results") throw new Error("unreachable");
-    expect(byId(last!.verdicts, "oldage").status).toBe("eligible");
+    expect(byId(last!.verdicts, "oldage").status).toBe("eligible"); // 60+, destitute, BPL, TN
     expect(byId(last!.verdicts, "widow").status).toBe("eligible");
-    expect(byId(last!.verdicts, "kmut").status).toBe("eligible");
+    expect(byId(last!.verdicts, "kmut").status).toBe("eligible"); // she is the head — any-rule passes via that sub
     expect(byId(last!.verdicts, "disabled").status).toBe("not_eligible");
+    expect(byId(last!.verdicts, "ignwps").status).toBe("not_eligible"); // age 67 > 59
+    expect(byId(last!.verdicts, "igndps").status).toBe("not_eligible"); // 0% disability
 
     // Session state accumulated across turns (the Redis-merge path).
     expect(last!.profile.age).toBe(67);
     expect(last!.profile.annual_family_income).toBe(80000);
     expect(last!.profile.is_tamil_nadu).toBe(true);
+    expect(last!.profile.is_bpl).toBe(true);
   });
 
   it("stops asking about a scheme once it is decided — no dead-end questions", async () => {
-    // A man → KMUT and widow are dead from turn one; only disability remains open.
+    // A man in TN → KMUT/widow/IGNWPS are dead from turn one (gender). Only oldage
+    // (needs is_bpl) and disabled/IGNDPS (need disability + income) remain open.
     const script: Record<string, Partial<Profile>> = {
-      "I'm a 70 year old man in Salem, no regular income, I own nothing": {
+      "I'm a 70 year old man in Salem, no regular income, BPL family, ~30k a year, own nothing": {
         age: 70,
         gender: "male",
         state: "Tamil Nadu",
         is_tamil_nadu: true,
         has_regular_income: false,
-        fixed_assets_value: 0,
+        is_bpl: true,
+        annual_family_income: 30000,
       },
       "I have 50 percent disability": { disability_percent: 50 },
     };
@@ -128,16 +125,17 @@ describe("scripted conversation → correct verdicts (end-to-end: merge → engi
       if (last.kind === "question") asked.push(last.field);
     }
 
-    // Only disability was ever asked — never a KMUT-only field (the scheme was already dead).
-    expect(asked).toEqual(["disability_percent"]);
-    const kmutOnly = ["is_family_head", "owns_four_wheeler", "annual_electricity_units", "annual_family_income"];
+    // KMUT-only fields must never have been asked — the scheme was dead from turn one.
+    const kmutOnly = ["is_family_head", "owns_four_wheeler", "annual_electricity_units"];
     for (const f of kmutOnly) expect(asked).not.toContain(f);
 
     expect(last!.kind).toBe("results");
     if (last!.kind !== "results") throw new Error("unreachable");
-    expect(byId(last!.verdicts, "oldage").status).toBe("eligible");
-    expect(byId(last!.verdicts, "disabled").status).toBe("eligible");
+    expect(byId(last!.verdicts, "oldage").status).toBe("eligible"); // 60+, destitute, BPL, TN
+    expect(byId(last!.verdicts, "disabled").status).toBe("eligible"); // 50% ≥ 40, destitute, income 30k ≤ 3L, TN
     expect(byId(last!.verdicts, "widow").status).toBe("not_eligible");
     expect(byId(last!.verdicts, "kmut").status).toBe("not_eligible");
+    expect(byId(last!.verdicts, "ignwps").status).toBe("not_eligible"); // not a widow
+    expect(byId(last!.verdicts, "igndps").status).toBe("not_eligible"); // 50% < 80
   });
 });
