@@ -239,7 +239,17 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     await deps.store.del(sessionKey(sessionId));
   }
 
-  return { handleTurn, assess, reassess, resetSession, loadProfile, saveProfile };
+  /**
+   * True when nothing is stored for this session yet (or every field is null). Channels
+   * use this to fire the "helper service, not the government" opening disclaimer on the
+   * very first contact — implicit consent is the citizen's continued interaction after.
+   */
+  async function isNewSession(sessionId: string): Promise<boolean> {
+    const state = await loadState(sessionId);
+    return Object.values(state.profile).every((v) => v === null || v === undefined);
+  }
+
+  return { handleTurn, assess, reassess, resetSession, isNewSession, loadProfile, saveProfile };
 }
 
 export type Orchestrator = ReturnType<typeof createOrchestrator>;

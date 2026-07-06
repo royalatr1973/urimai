@@ -20,7 +20,12 @@ export function buildResultsSummaryTamil(
 
   const parts: string[] = [];
   if (eligible.length > 0) {
-    parts.push(`நீங்கள் ${eligible.map((v) => name(v.schemeId)).join(", ")} திட்டத்திற்கு தகுதி பெறுகிறீர்கள்.`);
+    // HEDGE: not "you qualify" — "appears you may qualify" + "final decision is the officer's".
+    // False positives are the harmful direction (a citizen traveling to a VAO for nothing),
+    // so we soften the positive verdict and locate the authority every time.
+    parts.push(
+      `நீங்கள் ${eligible.map((v) => name(v.schemeId)).join(", ")} திட்டத்திற்கு தகுதி பெறக்கூடும் என்று தோன்றுகிறது. இறுதி முடிவு அரசு அதிகாரிதான் எடுப்பார்.`,
+    );
     parts.push("தேவையான ஆவணங்களை படத்தில் காட்டியுள்ளேன்.");
   } else {
     parts.push("தற்போதைய தகவலின் படி, நீங்கள் எந்த திட்டத்திற்கும் தகுதி பெறவில்லை.");

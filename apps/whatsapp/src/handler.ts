@@ -23,6 +23,7 @@ import type { InboundMessage, WhatsAppClient } from "./whatsapp.js";
 export interface OrchestratorLike {
   handleTurn(sessionId: string, text: string): Promise<TurnResult>;
   resetSession(sessionId: string): Promise<void>;
+  isNewSession(sessionId: string): Promise<boolean>;
 }
 
 export interface HandlerDeps {
@@ -43,6 +44,14 @@ export interface HandlerDeps {
 }
 
 const MSG = {
+  /**
+   * Sent as the FIRST message on any fresh session (empty profile). Locates the
+   * authority (final decision = government officer), names what Urimai is (a helper
+   * service, not the government), and reassures on data safety. The citizen's implicit
+   * consent is their continued interaction after seeing this.
+   */
+  opening:
+    "வணக்கம். இது ஒரு உதவி சேவை, அரசு அல்ல. நான் உங்களுக்கு எந்த திட்டங்களுக்கு தகுதி இருக்கலாம் என்று மட்டும் சொல்ல முடியும் — இறுதி முடிவு அரசு அதிகாரிதான். நான் சொல்வது ஒரு வழிகாட்டி மட்டுமே. உங்கள் தகவல்கள் பாதுகாப்பாக வைக்கப்படும்.",
   unsupported: "தயவுசெய்து உங்கள் நிலையை குரல் செய்தியாக அல்லது எழுத்தாக அனுப்புங்கள்.",
   handoff: "ஒரு உதவியாளர் விரைவில் உங்களைத் தொடர்புகொள்வார்.",
   reset: "சரி, புதிதாகத் தொடங்குகிறோம். இந்த நபரின் நிலையைச் சொல்லுங்கள்.",
@@ -100,8 +109,16 @@ export function createMessageHandler(deps: HandlerDeps) {
       return;
     }
 
+    // First-ever contact: play the opening disclaimer BEFORE the turn is processed.
+    // Locates authority (officer decides), names what Urimai is (a helper, not government),
+    // reassures on data safety. Implicit consent is continued interaction after this message.
+    const sessionId = `wa:${msg.from}`;
+    if (await deps.orchestrator.isNewSession(sessionId)) {
+      await speak(msg.from, MSG.opening);
+    }
+
     // Reuse the channel-agnostic orchestrator unchanged.
-    const result = await deps.orchestrator.handleTurn(`wa:${msg.from}`, text);
+    const result = await deps.orchestrator.handleTurn(sessionId, text);
 
     if (result.kind === "question") {
       await speak(msg.from, result.question.ta);
