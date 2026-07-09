@@ -11,14 +11,13 @@ describe("decideNext (against the real seeded rules)", () => {
     const r = decideNext(profile(), SEED_SCHEMES);
     expect(r.kind).toBe("question");
     if (r.kind !== "question") throw new Error("unreachable");
-    // is_tamil_nadu is referenced by all six schemes → highest value.
+    // is_tamil_nadu is referenced by all four schemes → highest value.
     expect(r.field).toBe("is_tamil_nadu");
   });
 
   it("delivers results once every scheme is resolved", () => {
     // A man, 65, destitute, BPL, not disabled, in TN. Enough facts to close every scheme.
-    // (BPL is now required by oldage/ignwps/igndps; the man fails gender/disability for the
-    // others.)
+    // (BPL is required by oldage; the man fails gender/disability for the others.)
     const r = decideNext(
       profile({
         gender: "male",
@@ -37,12 +36,10 @@ describe("decideNext (against the real seeded rules)", () => {
     expect(byId(r.verdicts, "widow").status).toBe("not_eligible"); // not a woman
     expect(byId(r.verdicts, "kmut").status).toBe("not_eligible"); // not a woman/transgender
     expect(byId(r.verdicts, "disabled").status).toBe("not_eligible"); // 0% disability
-    expect(byId(r.verdicts, "ignwps").status).toBe("not_eligible"); // not a widow
-    expect(byId(r.verdicts, "igndps").status).toBe("not_eligible"); // 0% disability
   });
 
   it("never asks a question for a field that only affects an already-resolved scheme", () => {
-    // Man → KMUT/widow/IGNWPS are dead (gender). Disability 0 → disabled/IGNDPS are dead.
+    // Man → KMUT/widow are dead (gender). Disability 0 → disabled is dead.
     // Only oldage remains open, missing has_regular_income + is_bpl. KMUT-only fields must
     // NOT be asked.
     const r = decideNext(

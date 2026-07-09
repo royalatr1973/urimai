@@ -20,9 +20,17 @@
  * DAPS (July 2026): adds an annual_family_income ≤ ₹3 lakh cap and drops the fixed-assets
  * gate — the document doesn't cite it for DAPS.
  *
- * IGNWPS and IGNDPS are new central-scheme entries (widow 40-60 + BPL, and 80%+ disability
- * + BPL respectively). The "one pension at a time" rule is surfaced in the reply text,
- * not as an exclusion — the citizen sees all their options and picks with the officer.
+ * Central schemes folded in (curator decision, July 2026): IGNWPS and IGNDPS are NOT
+ * separate citizen-facing schemes. In TN they are funding streams inside the same widow /
+ * disability pension — same ₹1,000, same taluk office, same officer, who assigns the
+ * central or state bucket himself. Modelling them separately produced only subset schemes
+ * (IGNWPS ⊂ DWPS, IGNDPS ⊂ DAPS) that could never change a verdict, plus hybrid criteria
+ * that matched neither NSAP nor TN sources. Old Age already models IGNOAPS+state as one
+ * scheme; widow (v3) and disabled (v3) now do the same, with the central stream noted in
+ * `note` text only. Re-split only if Urimai ever goes multi-state.
+ *
+ * disabled v3 also adds the age ≥ 18 floor (TN destitute differently-abled pension is 18+
+ * per district Revenue pages) — previously a minor could be marked "may be eligible".
  */
 import type { DocRef, Scheme } from "@urimai/types";
 
@@ -120,9 +128,9 @@ export const SEED_SCHEMES: Scheme[] = [
     nameTamil: "ஆதரவற்ற விதவை ஓய்வூதியம்",
     department: "Revenue (CRA) / Social Welfare",
     benefit: "₹1,000 / month",
-    note: "Pension for destitute widows in Tamil Nadu (18+). Widows aged 60+ should apply for Old Age Pension instead; widows 40-60 in BPL families may also apply for central IGNWPS.",
+    note: "Pension for destitute widows in Tamil Nadu (18+). Central IGNWPS funding (BPL widows 40+) is part of this same pension — the officer assigns the funding stream; the amount and office are identical. Widows aged 60+ may be routed to Old Age Pension by the officer.",
     applyAt: "TNeGA e-Sevai (REV-202) / e-Sevai Maiyam / CSC",
-    version: 2,
+    version: 3,
     effectiveFrom: null,
     source: SRC,
     verified: true,
@@ -145,13 +153,14 @@ export const SEED_SCHEMES: Scheme[] = [
     nameTamil: "மாற்றுத்திறனாளி ஓய்வூதியம்",
     department: "Revenue (CRA) / Welfare of Differently Abled",
     benefit: "₹1,000 / month",
-    note: "Pension for unemployed persons with 40%+ disability and family income ≤ ₹3 lakh. Requires UDID / disability passbook. Persons with 80%+ disability in BPL families may also apply for central IGNDPS.",
+    note: "Pension for unemployed persons (18+) with 40%+ disability and family income ≤ ₹3 lakh. Requires UDID / disability passbook. Central IGNDPS funding (80%+ disability, BPL) is part of this same pension — the officer assigns the funding stream; the amount and office are identical.",
     applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
-    version: 2,
+    version: 3,
     effectiveFrom: null,
     source: SRC,
     verified: true,
     criteria: [
+      { op: "gte", field: "age", value: 18, label: "Aged 18 or above", source: "TN district Revenue pages (destitute differently-abled pension, 18+)" },
       { op: "gte", field: "disability_percent", value: 40, label: "Disability of 40% or more", source: SRC },
       { op: "false", field: "has_regular_income", label: "Unemployed / no regular source of income", source: SRC },
       { op: "lte", field: "annual_family_income", value: 300000, label: "Annual family income ₹3 lakh or below", source: SRC },
@@ -161,54 +170,6 @@ export const SEED_SCHEMES: Scheme[] = [
     documents: [DOCS.disability_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert, DOCS.voter_id],
   },
 
-  // 5 ──────────────────────────────────────────────────────────────────────
-  {
-    id: "ignwps",
-    name: "Indira Gandhi National Widow Pension Scheme (IGNWPS)",
-    nameTamil: "இந்திரா காந்தி தேசிய விதவை ஓய்வூதியத் திட்டம்",
-    department: "Central scheme (delivered via Revenue / CRA in TN)",
-    benefit: "₹1,000 / month",
-    note: "Central-scheme widow pension for widows aged 40-60 in BPL families. Delivered alongside state DWPS in Tamil Nadu.",
-    applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
-    version: 1,
-    effectiveFrom: null,
-    source: SRC,
-    verified: true,
-    criteria: [
-      { op: "eq", field: "gender", value: "female", label: "Applicant is a woman", source: SRC },
-      { op: "eq", field: "marital_status", value: "widowed", label: "Widowed (not remarried)", source: SRC },
-      { op: "gte", field: "age", value: 40, label: "Aged 40 or above", source: SRC },
-      { op: "lte", field: "age", value: 59, label: "Aged 59 or below (age 60+ apply for Old Age)", source: SRC },
-      { op: "true", field: "is_bpl", label: "Below Poverty Line (BPL) family", source: SRC },
-      { op: "false", field: "has_regular_income", label: "Destitute — no adequate means of livelihood", source: SRC },
-      { op: "lte", field: "fixed_assets_value", value: 50000, label: "Fixed assets ₹50,000 or below", source: SRC },
-      { op: "true", field: "is_tamil_nadu", label: "Resident of Tamil Nadu", source: SRC },
-    ],
-    exclusions: [],
-    documents: [DOCS.death_cert, DOCS.destitute_widow_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert, DOCS.voter_id, DOCS.bpl_card],
-  },
-
-  // 6 ──────────────────────────────────────────────────────────────────────
-  {
-    id: "igndps",
-    name: "Indira Gandhi National Disability Pension Scheme (IGNDPS)",
-    nameTamil: "இந்திரா காந்தி தேசிய மாற்றுத்திறனாளி ஓய்வூதியத் திட்டம்",
-    department: "Central scheme (delivered via Revenue / CRA in TN)",
-    benefit: "₹1,000 / month",
-    note: "Central-scheme disability pension for persons with 80%+ disability in BPL families. Delivered alongside state DAPS in Tamil Nadu.",
-    applyAt: "Taluk office (Revenue), e-Sevai centre, or CSC",
-    version: 1,
-    effectiveFrom: null,
-    source: SRC,
-    verified: true,
-    criteria: [
-      { op: "gte", field: "disability_percent", value: 80, label: "Disability of 80% or more", source: SRC },
-      { op: "false", field: "has_regular_income", label: "Unemployed / no regular source of income", source: SRC },
-      { op: "lte", field: "annual_family_income", value: 300000, label: "Annual family income ₹3 lakh or below", source: SRC },
-      { op: "true", field: "is_bpl", label: "Below Poverty Line (BPL) family", source: SRC },
-      { op: "true", field: "is_tamil_nadu", label: "Resident of Tamil Nadu", source: SRC },
-    ],
-    exclusions: [],
-    documents: [DOCS.disability_cert, DOCS.aadhaar, DOCS.ration_card, DOCS.bank_passbook, DOCS.income_cert, DOCS.voter_id, DOCS.bpl_card],
-  },
+  // Central IGNWPS / IGNDPS were retired as separate schemes in July 2026 —
+  // folded into widow v3 / disabled v3 above. See the header comment.
 ];

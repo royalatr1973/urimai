@@ -85,8 +85,6 @@ describe("scripted conversation → correct verdicts (end-to-end: merge → engi
     expect(byId(last!.verdicts, "widow").status).toBe("eligible");
     expect(byId(last!.verdicts, "kmut").status).toBe("eligible"); // she is the head — any-rule passes via that sub
     expect(byId(last!.verdicts, "disabled").status).toBe("not_eligible");
-    expect(byId(last!.verdicts, "ignwps").status).toBe("not_eligible"); // age 67 > 59
-    expect(byId(last!.verdicts, "igndps").status).toBe("not_eligible"); // 0% disability
 
     // Session state accumulated across turns (the Redis-merge path).
     expect(last!.profile.age).toBe(67);
@@ -96,8 +94,8 @@ describe("scripted conversation → correct verdicts (end-to-end: merge → engi
   });
 
   it("stops asking about a scheme once it is decided — no dead-end questions", async () => {
-    // A man in TN → KMUT/widow/IGNWPS are dead from turn one (gender). Only oldage
-    // (needs is_bpl) and disabled/IGNDPS (need disability + income) remain open.
+    // A man in TN → KMUT/widow are dead from turn one (gender). Only oldage
+    // (needs is_bpl) and disabled (needs disability + income) remain open.
     const script: Record<string, Partial<Profile>> = {
       "I'm a 70 year old man in Salem, no regular income, BPL family, ~30k a year, own nothing": {
         age: 70,
@@ -135,7 +133,5 @@ describe("scripted conversation → correct verdicts (end-to-end: merge → engi
     expect(byId(last!.verdicts, "disabled").status).toBe("eligible"); // 50% ≥ 40, destitute, income 30k ≤ 3L, TN
     expect(byId(last!.verdicts, "widow").status).toBe("not_eligible");
     expect(byId(last!.verdicts, "kmut").status).toBe("not_eligible");
-    expect(byId(last!.verdicts, "ignwps").status).toBe("not_eligible"); // not a widow
-    expect(byId(last!.verdicts, "igndps").status).toBe("not_eligible"); // 50% < 80
   });
 });

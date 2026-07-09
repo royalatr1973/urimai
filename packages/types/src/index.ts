@@ -46,10 +46,9 @@ export type Profile = {
   elected_representative: boolean | null;
 
   // --- Below Poverty Line status ---
-  // Required for state Old Age Pension, central IGNWPS (widow 40-60), and IGNDPS (80%+
-  // disability). BPL status is issued by the local corporation (urban) or BDO / panchayat
-  // office (rural). Boolean answer suffices for eligibility; the certificate itself is
-  // collected at apply-stage.
+  // Required for Old Age Pension (modelled as IGNOAPS + TN state combined). BPL status is
+  // issued by the local corporation (urban) or BDO / panchayat office (rural). Boolean
+  // answer suffices for eligibility; the certificate itself is collected at apply-stage.
   is_bpl: boolean | null;
 };
 

@@ -63,7 +63,7 @@ describe("pending-field context — bare answers land on the right field", () =>
           is_tamil_nadu: true,
           has_regular_income: false,
           fixed_assets_value: 10000,
-          // Set is_bpl false so oldage/igndps are decided (not eligible) and don't compete
+          // Set is_bpl false so oldage is decided (not eligible) and doesn't compete
           // with disability_percent for the "next question" slot.
           is_bpl: false,
           annual_family_income: 50000,
@@ -85,9 +85,8 @@ describe("pending-field context — bare answers land on the right field", () =>
     expect(r1.kind).toBe("question");
     if (r1.kind !== "question") throw new Error("unreachable");
     // Widow eligible; oldage NOT eligible (no BPL); kmut needs is_family_head; disabled needs
-    // disability_percent; IGNWPS not_eligible (age); IGNDPS not_eligible (no BPL).
-    // is_family_head and disability_percent both count 1. By FIELD_PRIORITY, disability_percent
-    // (position 7) beats is_family_head (position 8).
+    // disability_percent. is_family_head and disability_percent both count 1. By
+    // FIELD_PRIORITY, disability_percent (position 7) beats is_family_head (position 8).
     expect(r1.field).toBe("disability_percent");
 
     // Bare "no" — without pendingField this would drop and re-ask; with it, disability_percent

@@ -11,7 +11,7 @@ const full = (o: Partial<Profile>): Profile => ({ ...EMPTY_PROFILE, ...o });
 const byId = (vs: Verdict[], id: string) => vs.find((v) => v.schemeId === id)!;
 
 describe("dashboard path (web channel): assess + reassess", () => {
-  it("assess() returns the merged profile and ALL six verdicts in one call", async () => {
+  it("assess() returns the merged profile and ALL four verdicts in one call", async () => {
     const orch = createOrchestrator({
       store: memoryStore(),
       extract: async () => full({ age: 67, gender: "female", marital_status: "widowed", is_tamil_nadu: true }),
@@ -20,8 +20,9 @@ describe("dashboard path (web channel): assess + reassess", () => {
 
     const a = await orch.assess("s1", "67 year old widow in Madurai");
     expect(a.profile.age).toBe(67);
-    // No next-question picker — every scheme assessed (6 schemes as of July 2026 verification).
-    expect(a.verdicts).toHaveLength(6);
+    // No next-question picker — every scheme assessed (4 schemes: central IGNWPS/IGNDPS
+    // folded into widow/disabled as of July 2026 — funding streams, not separate schemes).
+    expect(a.verdicts).toHaveLength(4);
     expect(byId(a.verdicts, "widow").status).toBe("need_info"); // still missing income/assets
   });
 
