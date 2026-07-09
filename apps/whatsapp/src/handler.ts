@@ -11,7 +11,8 @@
  */
 import type { TurnResult } from "@urimai/orchestrator";
 import type { Scheme } from "@urimai/types";
-import { renderDocumentCardSvg } from "./card.js";
+import { documentChecklistTextTamil, renderDocumentCardSvg } from "./card.js";
+import { CARDS_INTRO_TAMIL, CONDITION_CARDS, loadCardImage } from "./cards.js";
 import { isHelpRequest, isResetRequest } from "./help.js";
 import { buildResultsSummaryTamil } from "./reply.js";
 import type { EscalationQueue } from "./escalation.js";
@@ -38,6 +39,8 @@ export interface HandlerDeps {
   escalation: EscalationQueue;
   /** Optional SVG→PNG rasterizer for cards (Meta needs PNG/JPEG). Falls back to raw SVG. */
   rasterize?: (svg: string) => Promise<{ bytes: Buffer; mimeType: string }>;
+  /** Card-PNG loader, injectable for tests. Defaults to reading assets/cards/ from disk. */
+  loadCardImage?: (file: string) => Promise<Buffer>;
   /** Injected clock for deterministic tests. */
   now?: () => string;
   helplineText?: string;
@@ -60,6 +63,13 @@ const MSG = {
 
 export function createMessageHandler(deps: HandlerDeps) {
   const now = deps.now ?? (() => new Date().toISOString());
+  const loadCard = deps.loadCardImage ?? loadCardImage;
+
+  // Sessions that already received the four condition cards — sent once per session, on
+  // the FIRST results message (repeat messages after results must not re-spam 4 images).
+  // In-memory on purpose (tier-1 scale): a server restart re-sends at most once, which is
+  // gentler than adding a Redis dependency here. Cleared on "new person" reset.
+  const conditionCardsSentTo = new Set<string>();
 
   /** Voice when speech is configured; Tamil text otherwise. */
   async function speak(to: string, tamil: string): Promise<void> {
@@ -105,6 +115,7 @@ export function createMessageHandler(deps: HandlerDeps) {
     // must never merge across people.
     if (isResetRequest(text)) {
       await deps.orchestrator.resetSession(`wa:${msg.from}`);
+      conditionCardsSentTo.delete(`wa:${msg.from}`); // new person → they get the cards too
       await speak(msg.from, MSG.reset);
       return;
     }
@@ -134,11 +145,40 @@ export function createMessageHandler(deps: HandlerDeps) {
       if (v.status !== "eligible") continue;
       const scheme = byId[v.schemeId];
       if (!scheme) continue;
-      const svg = renderDocumentCardSvg(scheme);
-      const img = deps.rasterize
-        ? await deps.rasterize(svg)
-        : { bytes: Buffer.from(svg), mimeType: "image/svg+xml" };
-      await deps.whatsapp.sendImage(msg.from, img.bytes, img.mimeType, scheme.nameTamil);
+      // One failed checklist must not abort the rest of the reply (cards below still go).
+      try {
+        if (deps.rasterize) {
+          const img = await deps.rasterize(renderDocumentCardSvg(scheme));
+          await deps.whatsapp.sendImage(msg.from, img.bytes, img.mimeType, scheme.nameTamil);
+        } else {
+          // Meta's media API accepts PNG/JPEG only — raw SVG always 400s. Without a
+          // rasterizer, send the same checklist as Tamil text instead.
+          await deps.whatsapp.sendText(msg.from, documentChecklistTextTamil(scheme));
+        }
+      } catch (err) {
+        console.error(`[whatsapp] document checklist for ${scheme.id} failed:`, err);
+      }
+    }
+
+    // Then, once per session: ALL FOUR condition cards (curator decision — household
+    // coverage on shared phones; the cards carry their own official-confirmation
+    // disclaimer). Marked sent BEFORE sending: a partial failure must degrade to
+    // "some cards missing", never to re-spamming four images on the next message.
+    if (!conditionCardsSentTo.has(sessionId)) {
+      conditionCardsSentTo.add(sessionId);
+      try {
+        await deps.whatsapp.sendText(msg.from, CARDS_INTRO_TAMIL);
+      } catch (err) {
+        console.error("[whatsapp] cards intro failed:", err);
+      }
+      for (const card of CONDITION_CARDS) {
+        try {
+          const bytes = await loadCard(card.file);
+          await deps.whatsapp.sendImage(msg.from, bytes, "image/png", card.captionTamil);
+        } catch (err) {
+          console.error(`[whatsapp] condition card ${card.file} failed to send:`, err);
+        }
+      }
     }
   }
 

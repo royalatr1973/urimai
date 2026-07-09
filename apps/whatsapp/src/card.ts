@@ -52,3 +52,13 @@ export function renderDocumentCardSvg(scheme: Scheme): string {
 function escapeXml(s: string): string {
   return s.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!));
 }
+
+/**
+ * Text fallback for the document checklist. Meta's media API accepts PNG/JPEG only, so
+ * without a rasterizer the SVG card is unsendable (upload 400) — this Tamil text carries
+ * the same information: which papers to bring and where each is issued.
+ */
+export function documentChecklistTextTamil(scheme: Scheme): string {
+  const lines = scheme.documents.map((d) => `${ICON[d.id] ?? "📋"} ${d.nameTamil} (${d.whereToGet})`);
+  return `${scheme.nameTamil} — தேவையான ஆவணங்கள்:\n${lines.join("\n")}`;
+}

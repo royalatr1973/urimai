@@ -44,6 +44,8 @@ const baseDeps = () => {
     transcode,
     escalation,
     loadSchemes: async () => SEED_SCHEMES,
+    // Hermetic card loader — tests must not read PNGs from disk.
+    loadCardImage: vi.fn(async (_file: string) => Buffer.from("PNG")),
     now: () => "2026-01-01T00:00:00Z",
   };
   return { deps, whatsapp, speech, orchestrator, escalation, transcode };
@@ -90,7 +92,7 @@ describe("WhatsApp handler", () => {
     expect(whatsapp.sendAudio).toHaveBeenCalledOnce(); // spoken handoff
   });
 
-  it("results → speaks a summary and sends one document card per eligible scheme", async () => {
+  it("results (no rasterizer) → summary, TEXT document checklists, then ALL FOUR condition cards", async () => {
     const { deps, whatsapp, orchestrator } = baseDeps();
     orchestrator.handleTurn.mockResolvedValue({
       kind: "results",
@@ -101,10 +103,79 @@ describe("WhatsApp handler", () => {
     await h.handleInbound({ from: "9199", kind: "text", text: "..." });
 
     expect(whatsapp.sendAudio).toHaveBeenCalledOnce(); // the spoken summary
-    expect(whatsapp.sendImage).toHaveBeenCalledTimes(2); // one card per eligible scheme
-    const [, bytes, mime] = whatsapp.sendImage.mock.calls[0]!;
-    expect(Buffer.isBuffer(bytes)).toBe(true);
-    expect(mime).toBe("image/svg+xml");
+    // Meta rejects SVG — without a rasterizer the 2 document checklists go as Tamil TEXT,
+    // and the only images are the 4 condition-card PNGs (all schemes, curator decision).
+    expect(whatsapp.sendImage).toHaveBeenCalledTimes(4);
+    const mimes = whatsapp.sendImage.mock.calls.map((c) => c[2]);
+    expect(mimes).toEqual(["image/png", "image/png", "image/png", "image/png"]);
+    // 2 checklists + 1 cards lead-in.
+    expect(whatsapp.sendText).toHaveBeenCalledTimes(3);
+    expect(whatsapp.sendText.mock.calls[0]![1]).toContain("தேவையான ஆவணங்கள்");
+    expect(whatsapp.sendText.mock.calls[1]![1]).toContain("தேவையான ஆவணங்கள்");
+    expect(whatsapp.sendText.mock.calls[2]![1]).toContain("நான்கு திட்டங்களின்");
+  });
+
+  it("results (with rasterizer) → document cards go as rasterized PNG images", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "results",
+      verdicts: [verdict("oldage", "eligible"), verdict("widow", "not_eligible"), verdict("kmut", "not_eligible"), verdict("disabled", "not_eligible")],
+      profile: {} as never,
+    });
+    const rasterize = vi.fn(async (_svg: string) => ({ bytes: Buffer.from("RASTER"), mimeType: "image/png" }));
+    const h = createMessageHandler({ ...deps, rasterize });
+    await h.handleInbound({ from: "9199", kind: "text", text: "..." });
+
+    expect(rasterize).toHaveBeenCalledOnce();
+    // 1 rasterized document card + 4 condition cards, no SVG anywhere.
+    expect(whatsapp.sendImage).toHaveBeenCalledTimes(5);
+    expect(whatsapp.sendImage.mock.calls.every((c) => c[2] === "image/png")).toBe(true);
+  });
+
+  it("a failed document checklist does not abort the reply — condition cards still go", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "results",
+      verdicts: [verdict("oldage", "eligible"), verdict("widow", "not_eligible"), verdict("kmut", "not_eligible"), verdict("disabled", "not_eligible")],
+      profile: {} as never,
+    });
+    // The checklist text send fails (e.g. transient Meta error)…
+    whatsapp.sendText.mockRejectedValueOnce(new Error("boom"));
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "text", text: "..." });
+    // …but all four condition cards still arrive.
+    expect(whatsapp.sendImage).toHaveBeenCalledTimes(4);
+  });
+
+  it("condition cards go out ONCE per session — repeat messages after results don't re-spam", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "results",
+      verdicts: [verdict("oldage", "eligible"), verdict("widow", "not_eligible"), verdict("kmut", "not_eligible"), verdict("disabled", "not_eligible")],
+      profile: {} as never,
+    });
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "text", text: "first results" });
+    expect(whatsapp.sendImage).toHaveBeenCalledTimes(4); // the 4 condition cards
+
+    await h.handleInbound({ from: "9199", kind: "text", text: "why?" });
+    // Second results delivery: checklist text again, but NO condition cards re-sent.
+    expect(whatsapp.sendImage).toHaveBeenCalledTimes(4);
+  });
+
+  it("'new person' reset makes the condition cards go out again for the next person", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "results",
+      verdicts: [verdict("oldage", "eligible"), verdict("widow", "not_eligible"), verdict("kmut", "not_eligible"), verdict("disabled", "not_eligible")],
+      profile: {} as never,
+    });
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "text", text: "first results" }); // 4 cards
+    await h.handleInbound({ from: "9199", kind: "text", text: "புது நபர்" }); // reset
+    await h.handleInbound({ from: "9199", kind: "text", text: "அவருக்கு வயசு 70" });
+    // 4 (first person) + 4 (second person, cards re-sent after reset).
+    expect(whatsapp.sendImage).toHaveBeenCalledTimes(8);
   });
 
   it("'new person' resets the session (shared phones must never merge profiles)", async () => {
