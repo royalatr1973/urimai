@@ -10,7 +10,15 @@ describe("isResetRequest", () => {
   });
   it("does not fire on ordinary sentences containing 'new'", () => {
     expect(isResetRequest("I have no new income this year")).toBe(false);
+    expect(isResetRequest("I bought a new house")).toBe(false);
     expect(isResetRequest("எனக்கு வயசு 67, விதவை")).toBe(false);
+  });
+  it("treats a bare 'new'/'புது' (whole message) as a reset", () => {
+    expect(isResetRequest("New")).toBe(true);
+    expect(isResetRequest("new")).toBe(true);
+    expect(isResetRequest("  NEW  ")).toBe(true);
+    expect(isResetRequest("புது")).toBe(true);
+    expect(isResetRequest("restart")).toBe(true);
   });
 });
 

@@ -32,13 +32,27 @@ const RESET_PATTERNS = [
   "மறுதொடக்கம்", // restart
   "new person",
   "next person",
+  "new case",
   "start over",
   "start again",
   "reset",
 ];
 
+/**
+ * Short words that mean "reset" ONLY when they are the whole message. "new" inside a
+ * sentence ("I have a new house") must NOT wipe the profile, but a message that is nothing
+ * but "new" / "புது" is unambiguous reset intent — the common way users start a fresh case.
+ */
+const RESET_EXACT = new Set([
+  "new",
+  "புது", // pudhu — new
+  "புதிய", // pudhiya — new
+  "restart",
+]);
+
 export function isResetRequest(text: string): boolean {
   const t = (text ?? "").trim().toLowerCase();
   if (!t) return false;
+  if (RESET_EXACT.has(t)) return true;
   return RESET_PATTERNS.some((p) => t.includes(p));
 }
