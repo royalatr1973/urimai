@@ -14,6 +14,25 @@ function memoryStore(): SessionStore {
 const full = (o: Partial<Profile>): Profile => ({ ...EMPTY_PROFILE, ...o });
 
 describe("pending-field context — bare answers land on the right field", () => {
+  it("startSession (reset flow) opens with age, counter at 1, pendingField armed for a bare '65'", async () => {
+    const seen: Array<{ text: string; pending: string | null | undefined }> = [];
+    const extract = async (text: string, pendingField?: keyof Profile | null) => {
+      seen.push({ text, pending: pendingField ?? null });
+      return { ...EMPTY_PROFILE };
+    };
+    const orch = createOrchestrator({ store: memoryStore(), extract, loadSchemes: async () => SEED_SCHEMES });
+
+    const first = await orch.startSession("wa:reset");
+    expect(first.kind).toBe("question");
+    if (first.kind !== "question") throw new Error("unreachable");
+    expect(first.field).toBe("age"); // curator decision: age is the opener
+    expect(first.questionsAsked).toBe(1);
+
+    // The bare first answer is interpreted against the age question we just asked.
+    await orch.handleTurn("wa:reset", "65");
+    expect(seen[0]).toEqual({ text: "65", pending: "age" });
+  });
+
   it("passes the field asked in the previous turn to the extractor on the next turn", async () => {
     const seen: Array<{ text: string; pending: string | null | undefined }> = [];
     // Extractor that only returns something useful when it knows the pending field.

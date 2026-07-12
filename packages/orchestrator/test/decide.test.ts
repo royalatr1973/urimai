@@ -7,12 +7,13 @@ const profile = (o: Partial<Profile> = {}): Profile => ({ ...EMPTY_PROFILE, ...o
 const byId = (vs: Verdict[], id: string) => vs.find((v) => v.schemeId === id)!;
 
 describe("decideNext (against the real seeded rules)", () => {
-  it("with nothing known, asks the single most-unblocking question first (residency)", () => {
+  it("with nothing known, asks age first (curator decision: the easy universal opener)", () => {
     const r = decideNext(profile(), SEED_SCHEMES);
     expect(r.kind).toBe("question");
     if (r.kind !== "question") throw new Error("unreachable");
-    // is_tamil_nadu is referenced by all four schemes → highest value.
-    expect(r.field).toBe("is_tamil_nadu");
+    // age and is_tamil_nadu are both referenced by all four schemes; FIELD_PRIORITY
+    // breaks the tie in age's favour.
+    expect(r.field).toBe("age");
   });
 
   it("delivers results once every scheme is resolved", () => {

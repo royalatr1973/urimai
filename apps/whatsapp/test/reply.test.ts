@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import type { Verdict } from "@urimai/types";
-import { buildResultsSummaryTamil } from "../src/reply.js";
+import { EMPTY_PROFILE, type Profile, type Verdict } from "@urimai/types";
+import { buildProgressRecapTamil, buildResultsSummaryTamil } from "../src/reply.js";
 
 const V = (schemeId: string, status: Verdict["status"]): Verdict => ({
   schemeId,
@@ -50,8 +50,48 @@ describe("verdict hedge — appears may qualify, not you qualify", () => {
     expect(summary).toContain("தகுதி இல்லை");
   });
 
-  it("always closes with the help pointer", () => {
+  it("eligible results close with the e-Sevai direction, and the operator promise is gone", () => {
     const summary = buildResultsSummaryTamil([V("widow", "eligible")], NAMES);
-    expect(summary).toContain("'உதவி' என்று சொல்லுங்கள்");
+    expect(summary).toContain("இ-சேவை மையத்திற்குச் செல்லுங்கள்");
+    // No staffed operator service — the old "say 'help'" pointer must not appear.
+    expect(summary).not.toContain("'உதவி' என்று சொல்லுங்கள்");
+  });
+
+  it("not-eligible-only results carry no e-Sevai direction and no help pointer", () => {
+    const summary = buildResultsSummaryTamil([V("widow", "not_eligible")], NAMES);
+    expect(summary).not.toContain("இ-சேவை மையத்திற்குச்");
+    expect(summary).not.toContain("'உதவி' என்று சொல்லுங்கள்");
+  });
+});
+
+describe("progress recap (every 4 answered questions)", () => {
+  const profile: Profile = {
+    ...EMPTY_PROFILE,
+    age: 65,
+    marital_status: "married",
+    is_tamil_nadu: true,
+    has_regular_income: false,
+    annual_family_income: 25000,
+  };
+
+  it("recaps known facts, closed-scheme count, still-open schemes, and asks for patience", () => {
+    const recap = buildProgressRecapTamil(
+      profile,
+      [V("widow", "not_eligible"), V("oldage", "not_eligible"), V("kmut", "need_info"), V("disabled", "need_info")],
+      NAMES,
+    );
+    expect(recap).toContain("இதுவரை நான் அறிந்தது");
+    expect(recap).toContain("வயது 65");
+    expect(recap).toContain("திருமணமானவர்");
+    expect(recap).toContain("₹25,000");
+    expect(recap).toContain("2 திட்டங்களுக்கான முடிவு");
+    expect(recap).toContain("கலைஞர் மகளிர் உரிமைத் தொகை"); // still-open scheme, by name
+    expect(recap).toContain("பொறுமையாக"); // the cooperation ask
+  });
+
+  it("stays sensible with an empty profile (no 'so far I know:' with nothing after it)", () => {
+    const recap = buildProgressRecapTamil(EMPTY_PROFILE, [V("kmut", "need_info")], NAMES);
+    expect(recap).not.toContain("இதுவரை நான் அறிந்தது");
+    expect(recap).toContain("பொறுமையாக");
   });
 });

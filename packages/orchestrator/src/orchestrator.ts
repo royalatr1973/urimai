@@ -52,9 +52,13 @@ export type TurnResult =
   | {
       kind: "question";
       field: keyof Profile;
-      question: Question; // { en, ta }
+      question: Question; // { en, ta, purposeTa? }
       verdicts: Verdict[]; // current verdicts so far (all need_info / partial)
       profile: Profile;
+      /** How many questions this session has been asked, INCLUDING this one. Channels use
+       * it to pace progress recaps (e.g. a summary before every 5th question). Set on the
+       * handleTurn path; absent from the pure decideNext (which has no session). */
+      questionsAsked?: number;
     }
   | {
       kind: "results";
@@ -71,12 +75,14 @@ const sessionKey = (id: string) => `urimai:session:${id}`;
 interface SessionState {
   profile: Profile;
   pendingField: keyof Profile | null;
+  /** Questions asked so far in this session — drives the channel's progress recaps. */
+  questionsAsked: number;
 }
 
 /** Read a session blob tolerantly: accepts the new {profile, pendingField} shape and the
  * legacy shape that was just a Profile. */
 function decodeSession(raw: string | null): SessionState {
-  const empty: SessionState = { profile: { ...EMPTY_PROFILE }, pendingField: null };
+  const empty: SessionState = { profile: { ...EMPTY_PROFILE }, pendingField: null, questionsAsked: 0 };
   if (!raw) return empty;
   try {
     const parsed = JSON.parse(raw) as Partial<SessionState> & Partial<Profile>;
@@ -84,9 +90,10 @@ function decodeSession(raw: string | null): SessionState {
       return {
         profile: { ...EMPTY_PROFILE, ...(parsed.profile as Partial<Profile>) },
         pendingField: (parsed.pendingField as keyof Profile | null | undefined) ?? null,
+        questionsAsked: typeof parsed.questionsAsked === "number" ? parsed.questionsAsked : 0,
       };
     }
-    return { profile: { ...EMPTY_PROFILE, ...(parsed as Partial<Profile>) }, pendingField: null };
+    return { profile: { ...EMPTY_PROFILE, ...(parsed as Partial<Profile>) }, pendingField: null, questionsAsked: 0 };
   } catch {
     return empty;
   }
@@ -179,7 +186,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
 
   async function saveProfile(sessionId: string, profile: Profile): Promise<void> {
     const prev = await loadState(sessionId);
-    await saveState(sessionId, { profile, pendingField: prev.pendingField });
+    await saveState(sessionId, { ...prev, profile });
   }
 
   /**
@@ -195,9 +202,10 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     const result = decideNext(profile, schemes);
 
     const nextPending = result.kind === "question" ? result.field : null;
-    await saveState(sessionId, { profile, pendingField: nextPending });
+    const questionsAsked = result.kind === "question" ? state.questionsAsked + 1 : state.questionsAsked;
+    await saveState(sessionId, { profile, pendingField: nextPending, questionsAsked });
     await deps.audit?.({ sessionId, profile, verdicts: result.verdicts });
-    return result;
+    return result.kind === "question" ? { ...result, questionsAsked } : result;
   }
 
   /**
@@ -209,7 +217,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     const state = await loadState(sessionId);
     const extracted = await deps.extract(text, null);
     const profile = mergeProfiles(state.profile, extracted);
-    await saveState(sessionId, { profile, pendingField: null });
+    await saveState(sessionId, { ...state, profile, pendingField: null });
     const schemes = await deps.loadSchemes();
     const verdicts = evaluateProfile(profile, schemes);
     await deps.audit?.({ sessionId, profile, verdicts });
@@ -223,7 +231,8 @@ export function createOrchestrator(deps: OrchestratorDeps) {
    * engine stays on the server, so the audit trail stays complete and rules stay single-source.
    */
   async function reassess(sessionId: string, profile: Profile): Promise<Assessment> {
-    await saveState(sessionId, { profile, pendingField: null });
+    const prev = await loadState(sessionId);
+    await saveState(sessionId, { ...prev, profile, pendingField: null });
     const schemes = await deps.loadSchemes();
     const verdicts = evaluateProfile(profile, schemes);
     await deps.audit?.({ sessionId, profile, verdicts });
@@ -240,6 +249,23 @@ export function createOrchestrator(deps: OrchestratorDeps) {
   }
 
   /**
+   * Begin a fresh conversation WITHOUT user text: returns the first question (age, by
+   * FIELD_PRIORITY) with pendingField armed so a bare first answer ("65") lands on the
+   * right field, and the question counter started. Used by channels whose reset flow
+   * opens with a direct question instead of waiting for a first utterance.
+   */
+  async function startSession(sessionId: string): Promise<TurnResult> {
+    const profile = { ...EMPTY_PROFILE };
+    const schemes = await deps.loadSchemes();
+    const result = decideNext(profile, schemes);
+    const nextPending = result.kind === "question" ? result.field : null;
+    const questionsAsked = result.kind === "question" ? 1 : 0;
+    await saveState(sessionId, { profile, pendingField: nextPending, questionsAsked });
+    await deps.audit?.({ sessionId, profile, verdicts: result.verdicts });
+    return result.kind === "question" ? { ...result, questionsAsked } : result;
+  }
+
+  /**
    * True when nothing is stored for this session yet (or every field is null). Channels
    * use this to fire the "helper service, not the government" opening disclaimer on the
    * very first contact — implicit consent is the citizen's continued interaction after.
@@ -249,7 +275,7 @@ export function createOrchestrator(deps: OrchestratorDeps) {
     return Object.values(state.profile).every((v) => v === null || v === undefined);
   }
 
-  return { handleTurn, assess, reassess, resetSession, isNewSession, loadProfile, saveProfile };
+  return { handleTurn, assess, reassess, resetSession, startSession, isNewSession, loadProfile, saveProfile };
 }
 
 export type Orchestrator = ReturnType<typeof createOrchestrator>;

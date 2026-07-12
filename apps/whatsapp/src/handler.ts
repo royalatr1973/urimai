@@ -14,7 +14,7 @@ import type { Scheme } from "@urimai/types";
 import { documentChecklistTextTamil, renderDocumentCardSvg } from "./card.js";
 import { CARDS_INTRO_TAMIL, CONDITION_CARDS, loadCardImage } from "./cards.js";
 import { isHelpRequest, isResetRequest } from "./help.js";
-import { buildResultsSummaryTamil } from "./reply.js";
+import { buildProgressRecapTamil, buildResultsSummaryTamil } from "./reply.js";
 import type { EscalationQueue } from "./escalation.js";
 import type { SpeechProvider } from "./speech.js";
 import type { Transcoder } from "./transcode.js";
@@ -24,6 +24,8 @@ import type { InboundMessage, WhatsAppClient } from "./whatsapp.js";
 export interface OrchestratorLike {
   handleTurn(sessionId: string, text: string): Promise<TurnResult>;
   resetSession(sessionId: string): Promise<void>;
+  /** Fresh conversation without user text — returns the first question, pendingField armed. */
+  startSession(sessionId: string): Promise<TurnResult>;
   isNewSession(sessionId: string): Promise<boolean>;
 }
 
@@ -37,6 +39,8 @@ export interface HandlerDeps {
   transcode: Transcoder;
   loadSchemes: () => Promise<Scheme[]>;
   escalation: EscalationQueue;
+  /** Outbound WAV→OGG/Opus for voice replies (WhatsApp rejects audio/wav uploads). */
+  transcodeOut?: Transcoder;
   /** Optional SVG→PNG rasterizer for cards (Meta needs PNG/JPEG). Falls back to raw SVG. */
   rasterize?: (svg: string) => Promise<{ bytes: Buffer; mimeType: string }>;
   /** Card-PNG loader, injectable for tests. Defaults to reading assets/cards/ from disk. */
@@ -50,14 +54,23 @@ const MSG = {
   /**
    * Sent as the FIRST message on any fresh session (empty profile). Locates the
    * authority (final decision = government officer), names what Urimai is (a helper
-   * service, not the government), and reassures on data safety. The citizen's implicit
-   * consent is their continued interaction after seeing this.
+   * service, not the government), warns that a few questions (income, property) may
+   * feel difficult and are used only for scheme-eligibility assessment, then ASKS
+   * "may I ask the questions?" and WAITS — curator decision, July 2026: explicit
+   * consent, not announced consent. No question is asked until the citizen accepts.
    */
   opening:
-    "வணக்கம். இது ஒரு உதவி சேவை, அரசு அல்ல. நான் உங்களுக்கு எந்த திட்டங்களுக்கு தகுதி இருக்கலாம் என்று மட்டும் சொல்ல முடியும் — இறுதி முடிவு அரசு அதிகாரிதான். நான் சொல்வது ஒரு வழிகாட்டி மட்டுமே. உங்கள் தகவல்கள் பாதுகாப்பாக வைக்கப்படும்.",
+    "வணக்கம். இது ஒரு உதவி சேவை, அரசு அல்ல. அரசு நலத்திட்டங்களுக்கான உங்கள் தகுதியை அறிய நான் உதவுவேன் — இறுதி முடிவு அரசு அதிகாரிதான். " +
+    "அதற்காக சில கேள்விகள் கேட்க வேண்டும். வருமானம், சொத்து போன்ற சில கேள்விகள் சொல்வதற்கு தயக்கமாக இருக்கலாம் — ஆனால் அவை திட்டத் தகுதி மதிப்பீட்டிற்கு மட்டுமே பயன்படும், பாதுகாப்பாக வைக்கப்படும். கேள்விகளைக் கேட்கலாமா?",
+  /** Polite exit when the citizen declines the consent question. */
+  declined: "சரி, பரவாயில்லை. உங்களுக்கு விருப்பம் வரும்போது 'வணக்கம்' என்று அனுப்புங்கள். நன்றி.",
   unsupported: "தயவுசெய்து உங்கள் நிலையை குரல் செய்தியாக அல்லது எழுத்தாக அனுப்புங்கள்.",
-  handoff: "ஒரு உதவியாளர் விரைவில் உங்களைத் தொடர்புகொள்வார்.",
-  reset: "சரி, புதிதாகத் தொடங்குகிறோம். இந்த நபரின் நிலையைச் சொல்லுங்கள்.",
+  // No operator callback is offered (curator decision: we can't staff it, so we don't
+  // promise it) — "உதவி" gets honest direction to the real-world help desk instead.
+  handoff: "நேரடி உதவிக்கு, உங்கள் அருகிலுள்ள இ-சேவை மையம் அல்லது வட்டாட்சியர் அலுவலகத்தை அணுகவும்.",
+  // Reset acknowledgement only — the first concrete question (age) is appended by the
+  // handler via startSession, so the conversation moves immediately (curator decision).
+  reset: "சரி, புதிதாகத் தொடங்குகிறோம்.",
   voiceNotReady: "தற்போது குரல் செய்திகளை கேட்க முடியவில்லை — தயவுசெய்து எழுத்தாக அனுப்புங்கள்.",
 };
 
@@ -71,16 +84,44 @@ export function createMessageHandler(deps: HandlerDeps) {
   // gentler than adding a Redis dependency here. Cleared on "new person" reset.
   const conditionCardsSentTo = new Set<string>();
 
-  /** Voice when speech is configured; Tamil text otherwise. */
+  // Consent gate (curator decision, July 2026): the opening ends with "கேள்விகளைக்
+  // கேட்கலாமா?" and we WAIT. awaitingConsent stashes the first message's text so any
+  // substance in it ("I'm a 67-year-old widow…") isn't lost — it's folded into the first
+  // real turn once they accept. consented remembers acceptance for empty-profile sessions
+  // (the profile alone can't tell "brand new" from "accepted but nothing extracted yet").
+  // In-memory: a restart re-asks consent at most once. Cleared on "new person" reset.
+  const awaitingConsent = new Map<string, string>();
+  const consented = new Set<string>();
+
+  /** A refusal to the consent question — a short, whole-message "no". */
+  const DECLINE_EXACT = new Set(["வேண்டாம்", "இல்லை", "மாட்டேன்", "no", "illai", "vendam", "stop"]);
+  const isDecline = (t: string) => DECLINE_EXACT.has(t.trim().toLowerCase().replace(/[.!]+$/, ""));
+
+  /**
+   * Voice when speech is configured; Tamil text otherwise. Voice-first, §2.4: the voice
+   * note must be sufficient on its own — so voice mode sends VOICE ONLY (curator decision,
+   * July 2026: the text duplicate alongside every voice note felt like clutter; temporary,
+   * revisit with tester feedback). Text still goes out when synthesis or upload fails —
+   * voice trouble must never leave a citizen with silence.
+   */
   async function speak(to: string, tamil: string): Promise<void> {
     if (!deps.speech) {
       await deps.whatsapp.sendText(to, tamil);
       return;
     }
-    const { audio, mimeType } = await deps.speech.synthesize(tamil, { targetLang: "ta-IN" });
-    // WhatsApp voice notes are OGG/Opus; if the provider returns WAV, a production setup
-    // transcodes on the way out too. We pass the provider mime through here.
-    await deps.whatsapp.sendAudio(to, audio, mimeType);
+    try {
+      let { audio, mimeType } = await deps.speech.synthesize(tamil, { targetLang: "ta-IN" });
+      if (mimeType === "audio/wav") {
+        // WhatsApp's media API rejects WAV — convert to an OGG/Opus voice note.
+        if (!deps.transcodeOut) throw new Error("TTS returned WAV but no outbound transcoder is configured");
+        audio = await deps.transcodeOut(audio);
+        mimeType = "audio/ogg";
+      }
+      await deps.whatsapp.sendAudio(to, audio, mimeType);
+    } catch (err) {
+      console.error("[whatsapp] voice reply failed — falling back to text:", err instanceof Error ? err.message : err);
+      await deps.whatsapp.sendText(to, tamil);
+    }
   }
 
   /** Turn a WhatsApp inbound into a normalized text utterance. */
@@ -88,9 +129,16 @@ export function createMessageHandler(deps: HandlerDeps) {
     if (msg.kind === "text") return msg.text ?? "";
     if (msg.kind === "audio" && msg.mediaId) {
       if (!deps.speech) return null; // text-only mode: can't transcribe yet
-      const ogg = await deps.whatsapp.downloadMedia(msg.mediaId);
-      const wav = await deps.transcode(ogg);
-      return deps.speech.transcribe(wav, { sourceLang: "ta-IN" });
+      // ASR trouble (provider down, out of credits) must degrade to the "please type"
+      // nudge — a citizen who sent a voice note must never get silence back.
+      try {
+        const ogg = await deps.whatsapp.downloadMedia(msg.mediaId);
+        const wav = await deps.transcode(ogg);
+        return await deps.speech.transcribe(wav, { sourceLang: "ta-IN" });
+      } catch (err) {
+        console.error("[whatsapp] voice note transcription failed:", err instanceof Error ? err.message : err);
+        return null;
+      }
     }
     return null;
   }
@@ -98,7 +146,7 @@ export function createMessageHandler(deps: HandlerDeps) {
   async function handleInbound(msg: InboundMessage): Promise<void> {
     const text = await toText(msg);
     if (text === null) {
-      const nudge = msg.kind === "audio" && !deps.speech ? MSG.voiceNotReady : MSG.unsupported;
+      const nudge = msg.kind === "audio" ? MSG.voiceNotReady : MSG.unsupported;
       await deps.whatsapp.sendText(msg.from, nudge);
       return;
     }
@@ -111,28 +159,65 @@ export function createMessageHandler(deps: HandlerDeps) {
       return;
     }
 
-    // "new person" → clear the session. Shared phones serve many beneficiaries; profiles
-    // must never merge across people.
+    // "new person" → clear the session, then open DIRECTLY with the first question (age).
+    // The resetter is already mid-interaction, so the consent gate is not re-run — the
+    // disclaimer was heard on this phone at first contact (curator decision, July 2026).
     if (isResetRequest(text)) {
-      await deps.orchestrator.resetSession(`wa:${msg.from}`);
-      conditionCardsSentTo.delete(`wa:${msg.from}`); // new person → they get the cards too
-      await speak(msg.from, MSG.reset);
+      const sid = `wa:${msg.from}`;
+      await deps.orchestrator.resetSession(sid);
+      conditionCardsSentTo.delete(sid); // new person → they get the cards too
+      awaitingConsent.delete(sid);
+      consented.add(sid);
+      const first = await deps.orchestrator.startSession(sid);
+      const firstQuestion = first.kind === "question" ? ` ${first.question.ta}` : "";
+      await speak(msg.from, MSG.reset + firstQuestion);
       return;
     }
 
-    // First-ever contact: play the opening disclaimer BEFORE the turn is processed.
-    // Locates authority (officer decides), names what Urimai is (a helper, not government),
-    // reassures on data safety. Implicit consent is continued interaction after this message.
     const sessionId = `wa:${msg.from}`;
-    if (await deps.orchestrator.isNewSession(sessionId)) {
+
+    // First-ever contact: opening disclaimer, ending with the consent question — then
+    // WAIT. No orchestration until the citizen accepts. Their first message's text is
+    // stashed so nothing they volunteered is lost.
+    if (!consented.has(sessionId) && !awaitingConsent.has(sessionId) && (await deps.orchestrator.isNewSession(sessionId))) {
+      awaitingConsent.set(sessionId, text);
       await speak(msg.from, MSG.opening);
+      return;
+    }
+
+    // The reply to the consent question: a whole-message "no" ends politely; anything
+    // else — a yes, or them simply starting to describe their situation — is acceptance.
+    let turnText = text;
+    if (awaitingConsent.has(sessionId)) {
+      const stashed = awaitingConsent.get(sessionId)!;
+      awaitingConsent.delete(sessionId);
+      if (isDecline(text)) {
+        await speak(msg.from, MSG.declined);
+        return;
+      }
+      consented.add(sessionId);
+      turnText = `${stashed} ${text}`.trim();
+    } else {
+      consented.add(sessionId); // continuing session (e.g. after restart) — consent stands
     }
 
     // Reuse the channel-agnostic orchestrator unchanged.
-    const result = await deps.orchestrator.handleTurn(sessionId, text);
+    const result = await deps.orchestrator.handleTurn(sessionId, turnText);
 
     if (result.kind === "question") {
-      await speak(msg.from, result.question.ta);
+      const parts: string[] = [];
+      // Progress recap before question 5, 9, 13… (curator feedback: after 4 answers,
+      // say what we've learned, which schemes remain, and ask for patience).
+      const n = result.questionsAsked ?? 0;
+      if (n >= 5 && (n - 1) % 4 === 0) {
+        const schemes = await deps.loadSchemes();
+        const byId = Object.fromEntries(schemes.map((s) => [s.id, s]));
+        parts.push(buildProgressRecapTamil(result.profile, result.verdicts, byId));
+      }
+      // Delicate questions carry their curator-written purpose line first.
+      if (result.question.purposeTa) parts.push(result.question.purposeTa);
+      parts.push(result.question.ta);
+      await speak(msg.from, parts.join(" "));
       return;
     }
 

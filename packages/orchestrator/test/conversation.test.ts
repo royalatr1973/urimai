@@ -93,6 +93,27 @@ describe("scripted conversation → correct verdicts (end-to-end: merge → engi
     expect(last!.profile.is_bpl).toBe(true);
   });
 
+  it("counts questions asked across the session (drives the channel's progress recaps)", async () => {
+    const script: Record<string, Partial<Profile>> = {
+      "வணக்கம்": {},
+      "தமிழ்நாடு": { state: "Tamil Nadu", is_tamil_nadu: true },
+      "வயசு 67": { age: 67 },
+    };
+    const orch = createOrchestrator({
+      store: memoryStore(),
+      extract: scriptedExtractor(script),
+      loadSchemes: async () => SEED_SCHEMES,
+    });
+
+    const r1 = await orch.handleTurn("count-session", "வணக்கம்");
+    const r2 = await orch.handleTurn("count-session", "தமிழ்நாடு");
+    const r3 = await orch.handleTurn("count-session", "வயசு 67");
+    if (r1.kind !== "question" || r2.kind !== "question" || r3.kind !== "question") throw new Error("expected questions");
+    expect(r1.questionsAsked).toBe(1);
+    expect(r2.questionsAsked).toBe(2);
+    expect(r3.questionsAsked).toBe(3);
+  });
+
   it("stops asking about a scheme once it is decided — no dead-end questions", async () => {
     // A man in TN → KMUT/widow are dead from turn one (gender). Only oldage
     // (needs is_bpl) and disabled (needs disability + income) remain open.

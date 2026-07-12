@@ -19,7 +19,7 @@ function fakeSpeech(): SpeechProvider & { transcribe: ReturnType<typeof vi.fn>; 
   return {
     name: "fake",
     transcribe: vi.fn(async () => "transcribed tamil text"),
-    synthesize: vi.fn(async () => ({ audio: Buffer.from("AUDIO"), mimeType: "audio/wav" })),
+    synthesize: vi.fn(async () => ({ audio: Buffer.from("AUDIO"), mimeType: "audio/mpeg" })),
   };
 }
 
@@ -31,6 +31,15 @@ const baseDeps = () => {
   const orchestrator = {
     handleTurn: vi.fn<(sessionId: string, text: string) => Promise<TurnResult>>(),
     resetSession: vi.fn(async (_sessionId: string) => {}),
+    // Reset flow opens with the first question directly.
+    startSession: vi.fn(async (_sessionId: string): Promise<TurnResult> => ({
+      kind: "question",
+      field: "age",
+      question: { en: "How old are you?", ta: "உங்கள் வயதை தயவுசெய்து சொல்லுங்களேன்?" },
+      verdicts: [],
+      profile: {} as never,
+      questionsAsked: 1,
+    })),
     // Default: continuing session (no opening disclaimer). Individual tests override for
     // the "first-ever contact" case.
     isNewSession: vi.fn(async (_sessionId: string) => false),
@@ -102,13 +111,13 @@ describe("WhatsApp handler", () => {
     const h = createMessageHandler(deps);
     await h.handleInbound({ from: "9199", kind: "text", text: "..." });
 
-    expect(whatsapp.sendAudio).toHaveBeenCalledOnce(); // the spoken summary
+    expect(whatsapp.sendAudio).toHaveBeenCalledOnce(); // the spoken summary — voice ONLY
     // Meta rejects SVG — without a rasterizer the 2 document checklists go as Tamil TEXT,
     // and the only images are the 4 condition-card PNGs (all schemes, curator decision).
     expect(whatsapp.sendImage).toHaveBeenCalledTimes(4);
     const mimes = whatsapp.sendImage.mock.calls.map((c) => c[2]);
     expect(mimes).toEqual(["image/png", "image/png", "image/png", "image/png"]);
-    // 2 checklists + 1 cards lead-in.
+    // Voice mode sends NO text duplicate of the summary: 2 checklists + 1 cards lead-in.
     expect(whatsapp.sendText).toHaveBeenCalledTimes(3);
     expect(whatsapp.sendText.mock.calls[0]![1]).toContain("தேவையான ஆவணங்கள்");
     expect(whatsapp.sendText.mock.calls[1]![1]).toContain("தேவையான ஆவணங்கள்");
@@ -140,11 +149,43 @@ describe("WhatsApp handler", () => {
       profile: {} as never,
     });
     // The checklist text send fails (e.g. transient Meta error)…
-    whatsapp.sendText.mockRejectedValueOnce(new Error("boom"));
+    whatsapp.sendText.mockImplementation(async (_to: string, text: string) => {
+      if (text.includes("தேவையான ஆவணங்கள்")) throw new Error("boom");
+    });
     const h = createMessageHandler(deps);
     await h.handleInbound({ from: "9199", kind: "text", text: "..." });
     // …but all four condition cards still arrive.
     expect(whatsapp.sendImage).toHaveBeenCalledTimes(4);
+  });
+
+  it("voice-first: WAV TTS output is transcoded to OGG/Opus before sending", async () => {
+    const { deps, whatsapp, speech, orchestrator } = baseDeps();
+    speech.synthesize.mockResolvedValue({ audio: Buffer.from("WAV"), mimeType: "audio/wav" });
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "question", field: "age", question: { en: "Age?", ta: "வயது?" }, verdicts: [], profile: {} as never,
+    });
+    const transcodeOut = vi.fn(async (_wav: Buffer) => Buffer.from("OGG"));
+    const h = createMessageHandler({ ...deps, transcodeOut });
+    await h.handleInbound({ from: "9199", kind: "text", text: "வணக்கம்" });
+
+    expect(transcodeOut).toHaveBeenCalledOnce();
+    const [, bytes, mime] = whatsapp.sendAudio.mock.calls[0]!;
+    expect((bytes as Buffer).toString()).toBe("OGG");
+    expect(mime).toBe("audio/ogg");
+  });
+
+  it("voice failure degrades to text, never silence", async () => {
+    const { deps, whatsapp, speech, orchestrator } = baseDeps();
+    speech.synthesize.mockRejectedValue(new Error("TTS down"));
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "question", field: "age", question: { en: "Age?", ta: "வயது?" }, verdicts: [], profile: {} as never,
+    });
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "text", text: "வணக்கம்" });
+
+    // The Tamil text went out BEFORE synthesis was attempted; the failure is swallowed.
+    expect(whatsapp.sendText).toHaveBeenCalledWith("9199", "வயது?");
+    expect(whatsapp.sendAudio).not.toHaveBeenCalled();
   });
 
   it("condition cards go out ONCE per session — repeat messages after results don't re-spam", async () => {
@@ -178,14 +219,18 @@ describe("WhatsApp handler", () => {
     expect(whatsapp.sendImage).toHaveBeenCalledTimes(8);
   });
 
-  it("'new person' resets the session (shared phones must never merge profiles)", async () => {
-    const { deps, orchestrator, whatsapp } = baseDeps();
+  it("'new person' resets the session and opens DIRECTLY with the age question", async () => {
+    const { deps, orchestrator, speech, whatsapp } = baseDeps();
     const h = createMessageHandler(deps);
     await h.handleInbound({ from: "9199", kind: "text", text: "புது நபர்" });
 
     expect(orchestrator.resetSession).toHaveBeenCalledWith("wa:9199");
+    expect(orchestrator.startSession).toHaveBeenCalledWith("wa:9199"); // arms pendingField for a bare "65"
     expect(orchestrator.handleTurn).not.toHaveBeenCalled();
-    expect(whatsapp.sendAudio).toHaveBeenCalledOnce(); // spoken confirmation
+    expect(whatsapp.sendAudio).toHaveBeenCalledOnce(); // ONE message: ack + first question
+    const spoken = speech.synthesize.mock.calls[0]![0] as string;
+    expect(spoken).toContain("புதிதாகத் தொடங்குகிறோம்");
+    expect(spoken).toContain("வயதை"); // …ends by asking the age
   });
 
   it("unsupported message kinds get a gentle text nudge, no orchestration", async () => {
@@ -226,44 +271,63 @@ describe("text-only mode (no speech provider configured)", () => {
   });
 });
 
-describe("opening disclaimer (first-ever contact)", () => {
-  it("fires on a fresh session BEFORE the turn is processed, and only once", async () => {
-    const { deps, whatsapp, speech, orchestrator } = baseDeps();
-    orchestrator.isNewSession.mockResolvedValue(true); // fresh session
-    orchestrator.handleTurn.mockResolvedValue({
-      kind: "question",
-      field: "age",
-      question: { en: "Age?", ta: "உங்கள் வயது?" },
-      verdicts: [],
-      profile: {} as never,
-    });
+describe("opening disclaimer + consent gate (first-ever contact)", () => {
+  const ageQuestion = {
+    kind: "question" as const,
+    field: "age" as const,
+    question: { en: "Age?", ta: "உங்கள் வயது?" },
+    verdicts: [],
+    profile: {} as never,
+  };
+
+  it("fresh session → disclaimer ends with the consent question and WAITS (no orchestration)", async () => {
+    const { deps, speech, orchestrator } = baseDeps();
+    orchestrator.isNewSession.mockResolvedValue(true);
     const h = createMessageHandler(deps);
     await h.handleInbound({ from: "9199", kind: "text", text: "வணக்கம்" });
 
-    // Two spoken outputs, in order: disclaimer FIRST, then the orchestrator question.
-    expect(speech.synthesize).toHaveBeenCalledTimes(2);
-    const firstSpoken = speech.synthesize.mock.calls[0]![0] as string;
-    // The disclaimer names Urimai as a helper (not government) and locates the authority.
-    expect(firstSpoken).toContain("உதவி சேவை");
-    expect(firstSpoken).toContain("அரசு அல்ல");
-    expect(firstSpoken).toContain("இறுதி முடிவு");
-    // Second spoken is the question.
-    const secondSpoken = speech.synthesize.mock.calls[1]![0] as string;
-    expect(secondSpoken).toBe("உங்கள் வயது?");
-    // Both delivered as audio.
-    expect(whatsapp.sendAudio).toHaveBeenCalledTimes(2);
+    // ONE spoken output: the disclaimer, naming Urimai a helper (not government),
+    // locating the authority, and ASKING permission — no question yet.
+    expect(speech.synthesize).toHaveBeenCalledOnce();
+    const spoken = speech.synthesize.mock.calls[0]![0] as string;
+    expect(spoken).toContain("உதவி சேவை");
+    expect(spoken).toContain("அரசு அல்ல");
+    expect(spoken).toContain("இறுதி முடிவு");
+    expect(spoken).toContain("தயக்கமாக இருக்கலாம்"); // some questions may feel difficult
+    expect(spoken).toContain("மதிப்பீட்டிற்கு மட்டுமே"); // used only for assessment
+    expect(spoken).toContain("கேட்கலாமா"); // asks permission…
+    expect(orchestrator.handleTurn).not.toHaveBeenCalled(); // …and waits
   });
 
-  it("does NOT fire on a continuing session (implicit consent from prior interaction)", async () => {
+  it("acceptance starts the questions, folding in anything said in the first message", async () => {
+    const { deps, orchestrator } = baseDeps();
+    orchestrator.isNewSession.mockResolvedValue(true);
+    orchestrator.handleTurn.mockResolvedValue(ageQuestion);
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "text", text: "எனக்கு 67 வயது" }); // rich first message
+    await h.handleInbound({ from: "9199", kind: "text", text: "சரி" }); // consent
+
+    expect(orchestrator.handleTurn).toHaveBeenCalledOnce();
+    // The volunteered facts from the first message are not lost.
+    expect(orchestrator.handleTurn).toHaveBeenCalledWith("wa:9199", "எனக்கு 67 வயது சரி");
+  });
+
+  it("a whole-message 'வேண்டாம்' declines politely — still no questions", async () => {
+    const { deps, speech, orchestrator } = baseDeps();
+    orchestrator.isNewSession.mockResolvedValue(true);
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "text", text: "வணக்கம்" });
+    await h.handleInbound({ from: "9199", kind: "text", text: "வேண்டாம்" });
+
+    expect(orchestrator.handleTurn).not.toHaveBeenCalled();
+    const lastSpoken = speech.synthesize.mock.calls.at(-1)![0] as string;
+    expect(lastSpoken).toContain("பரவாயில்லை"); // polite exit
+  });
+
+  it("does NOT fire on a continuing session (consent already given)", async () => {
     const { deps, whatsapp, speech, orchestrator } = baseDeps();
     orchestrator.isNewSession.mockResolvedValue(false); // continuing session
-    orchestrator.handleTurn.mockResolvedValue({
-      kind: "question",
-      field: "age",
-      question: { en: "Age?", ta: "உங்கள் வயது?" },
-      verdicts: [],
-      profile: {} as never,
-    });
+    orchestrator.handleTurn.mockResolvedValue(ageQuestion);
     const h = createMessageHandler(deps);
     await h.handleInbound({ from: "9199", kind: "text", text: "68" });
 
@@ -275,20 +339,77 @@ describe("opening disclaimer (first-ever contact)", () => {
   it("in text-only mode, the disclaimer is sent as Tamil text (not audio)", async () => {
     const { deps, whatsapp, orchestrator } = baseDeps();
     orchestrator.isNewSession.mockResolvedValue(true);
-    orchestrator.handleTurn.mockResolvedValue({
-      kind: "question",
-      field: "age",
-      question: { en: "Age?", ta: "வயது?" },
-      verdicts: [],
-      profile: {} as never,
-    });
     const h = createMessageHandler({ ...deps, speech: null });
     await h.handleInbound({ from: "9199", kind: "text", text: "hi" });
 
-    // sendText called at least twice: once for disclaimer, once for question.
-    expect(whatsapp.sendText.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(whatsapp.sendText).toHaveBeenCalledOnce(); // the disclaimer alone; then it waits
     const disclaimer = whatsapp.sendText.mock.calls[0]![1] as string;
     expect(disclaimer).toContain("உதவி சேவை");
     expect(disclaimer).toContain("அரசு அல்ல");
+    expect(disclaimer).toContain("கேட்கலாமா");
   });
+});
+
+describe("ASR failure resilience", () => {
+  it("a voice note whose transcription fails gets the 'please type' nudge, not silence", async () => {
+    const { deps, whatsapp, speech, orchestrator } = baseDeps();
+    speech.transcribe.mockRejectedValue(new Error("out of credits"));
+    const h = createMessageHandler(deps);
+    await h.handleInbound({ from: "9199", kind: "audio", mediaId: "M1" });
+
+    expect(whatsapp.sendText).toHaveBeenCalledOnce();
+    expect(whatsapp.sendText.mock.calls[0]![1]).toContain("குரல்"); // the voice-not-ready nudge
+    expect(orchestrator.handleTurn).not.toHaveBeenCalled();
+  });
+});
+
+describe("question pacing and purpose lines", () => {
+  const question = (over: Partial<{ purposeTa: string }> = {}, questionsAsked = 1): TurnResult => ({
+    kind: "question",
+    field: "annual_family_income",
+    question: { en: "Income?", ta: "வருமானம் எவ்வளவு?", ...over },
+    verdicts: [verdict("kmut", "need_info"), verdict("widow", "not_eligible")],
+    profile: {} as never,
+    questionsAsked,
+  });
+
+  it("delicate questions carry their purpose line before the question", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    orchestrator.handleTurn.mockResolvedValue(question({ purposeTa: "சில திட்டங்கள் குறைந்த வருமானக் குடும்பங்களுக்கு மட்டுமே — அதனால் கேட்கிறேன்." }));
+    const h = createMessageHandler({ ...deps, speech: null }); // text mode to inspect the composed message
+    await h.handleInbound({ from: "9199", kind: "text", text: "..." });
+
+    const sent = whatsapp.sendText.mock.calls[0]![1] as string;
+    expect(sent).toContain("அதனால் கேட்கிறேன்");
+    expect(sent.indexOf("அதனால் கேட்கிறேன்")).toBeLessThan(sent.indexOf("வருமானம் எவ்வளவு?"));
+  });
+
+  it("prepends the progress recap before question 5 (after 4 answers), not before question 4", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    const h = createMessageHandler({ ...deps, speech: null }); // text mode to inspect the composed message
+
+    orchestrator.handleTurn.mockResolvedValue(question({}, 4));
+    await h.handleInbound({ from: "9199", kind: "text", text: "..." });
+    expect(whatsapp.sendText.mock.calls[0]![1]).not.toContain("பொறுமையாக");
+
+    orchestrator.handleTurn.mockResolvedValue(question({}, 5));
+    await h.handleInbound({ from: "9199", kind: "text", text: "..." });
+    const withRecap = whatsapp.sendText.mock.calls[1]![1] as string;
+    expect(withRecap).toContain("பொறுமையாக"); // recap present…
+    expect(withRecap).toContain("வருமானம் எவ்வளவு?"); // …followed by the question, one message
+    // The message must END with the next question — recap first, question last.
+    expect(withRecap.indexOf("பொறுமையாக")).toBeLessThan(withRecap.indexOf("வருமானம் எவ்வளவு?"));
+    expect(withRecap.trim().endsWith("வருமானம் எவ்வளவு?")).toBe(true);
+  });
+
+  it("voice mode sends questions as voice ONLY — no duplicate text message", async () => {
+    const { deps, whatsapp, orchestrator } = baseDeps();
+    orchestrator.handleTurn.mockResolvedValue(question({}, 1));
+    const h = createMessageHandler(deps); // speech configured
+    await h.handleInbound({ from: "9199", kind: "text", text: "..." });
+
+    expect(whatsapp.sendAudio).toHaveBeenCalledOnce();
+    expect(whatsapp.sendText).not.toHaveBeenCalled();
+  });
+
 });
