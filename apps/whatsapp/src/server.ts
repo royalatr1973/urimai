@@ -9,7 +9,7 @@ import { listLatestSchemes, DbEscalationQueue } from "@urimai/db";
 import { createDefaultOrchestrator } from "@urimai/orchestrator";
 import { createMessageHandler, type MessageHandler } from "./handler.js";
 import { createSpeechProvider, type SpeechConfig } from "./speech.js";
-import { transcodeOggToWav } from "./transcode.js";
+import { transcodeOggToWav, transcodeWavToOggOpus } from "./transcode.js";
 import { MetaWhatsAppClient, parseInbound, verifyChallenge, verifySignature } from "./whatsapp.js";
 
 const env = process.env;
@@ -44,6 +44,7 @@ function buildHandler(): { handler: MessageHandler | null; reason?: string } {
       speech,
       whatsapp: new MetaWhatsAppClient({ phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID, accessToken: env.WHATSAPP_ACCESS_TOKEN }),
       transcode: transcodeOggToWav,
+      transcodeOut: transcodeWavToOggOpus,
       loadSchemes: () => listLatestSchemes(),
       escalation: new DbEscalationQueue(), // help tickets persist (encrypted) for the operator view
       helplineText: env.HELPLINE_TEXT,
