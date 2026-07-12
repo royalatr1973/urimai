@@ -79,7 +79,8 @@ Remember: every key present, null when unknown, JSON object only.`;
  */
 const FIELD_CONTEXT: Record<string, string> = {
   age: "the person's age in years",
-  gender: 'the person\'s gender ("male", "female", or "other" for transgender)',
+  gender:
+    'the person\'s gender ("male", "female", or "other" for transgender). Voice transcripts render spoken English phonetically in Tamil: a bare "மேல்" / "மெயில்" / "மேல" is "male"; a bare "பீமேல்" / "பிமேல்" / "·பீமெயில்" is "female" — map them accordingly (only as a bare answer to this question)',
   marital_status: 'the person\'s marital status ("married", "widowed", "unmarried", or "divorced")',
   state: "the Indian state / district / city the person lives in",
   is_tamil_nadu: "whether the person lives in Tamil Nadu (a bare yes/no maps to true/false; a district or town name confirming Tamil Nadu should also set state)",
@@ -109,7 +110,7 @@ const FIELD_CONTEXT: Record<string, string> = {
  */
 export function buildUserPrompt(text: string, pendingField?: string | null): string {
   const context = pendingField && FIELD_CONTEXT[pendingField]
-    ? `\n\nContext for this reply: in the previous turn, the system asked the user about "${pendingField}" — ${FIELD_CONTEXT[pendingField]}. If this reply is a bare answer (a lone number, "yes"/"no", "இல்லை"/"ஆம்"), interpret it as an answer to that specific field. If the reply also contains other information, extract that too (still following the field rules — never guess).`
+    ? `\n\nContext for this reply: in the previous turn, the system asked the user about "${pendingField}" — ${FIELD_CONTEXT[pendingField]}. If this reply is a bare answer (a lone number, "yes"/"no", "இல்லை"/"ஆம்"), interpret it as an answer to that specific field. The text may come from Tamil speech transcription, where spoken English words appear as Tamil phonetic spellings — a bare "எஸ்" is "yes", "நோ" is "no"; read such bare answers against the asked field. If the reply also contains other information, extract that too (still following the field rules — never guess).`
     : "";
   return `Person's words:\n"""\n${text}\n"""${context}\n\nReturn the JSON profile object now.`;
 }
