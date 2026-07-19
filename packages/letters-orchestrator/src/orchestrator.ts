@@ -14,9 +14,18 @@ import type { FactKey, LetterDraft, LetterFacts, LetterType } from "@urimai/type
 import { missingRequiredFacts, resolveLanguage, resolveLetterType } from "@urimai/letter-types";
 import { draftHash } from "@urimai/docgen";
 import type { Classification } from "@urimai/letters-extractor";
-import { isApproval, isDontKnow, isNo, isYes } from "./intents.js";
-import { chunkReadback } from "./readback.js";
-import { confirmTypePrompt, LISTEN_PROMPT, QUESTIONS, READBACK_PROMPT, type LetterQuestion } from "./questions.js";
+import { classifyReviewReply, isDontKnow, isNo, isYes } from "./intents.js";
+import { chunkChangedReadback, chunkReadback } from "./readback.js";
+import {
+  CHANGED_INTRO,
+  CLARIFY_PROMPT,
+  confirmTypePrompt,
+  LISTEN_PROMPT,
+  NO_CHANGE_NEEDED,
+  QUESTIONS,
+  READBACK_PROMPT,
+  type LetterQuestion,
+} from "./questions.js";
 
 /** Minimal session-store contract (satisfied by ioredis; faked in tests). */
 export interface SessionStore {
@@ -60,7 +69,16 @@ export type LetterTurnResult =
   | { kind: "listen"; prompt: LetterQuestion }
   | { kind: "confirm_type"; typeId: string; prompt: LetterQuestion; facts: LetterFacts }
   | { kind: "question"; fact: FactKey; question: LetterQuestion; typeId: string; facts: LetterFacts }
-  | { kind: "readback"; draft: LetterDraft; chunks: string[]; revisions: number; prompt: LetterQuestion }
+  | {
+      kind: "readback";
+      draft: LetterDraft;
+      chunks: string[];
+      revisions: number;
+      prompt: LetterQuestion;
+      /** true after a correction: chunks carry only the changed part, not the whole letter. */
+      changedOnly: boolean;
+    }
+  | { kind: "clarify"; prompt: LetterQuestion; revisions: number }
   | { kind: "approved"; draft: LetterDraft; draftHash: string; revisions: number; approvalUtterance: string }
   | { kind: "escalate"; reason: "revision_cap"; revisions: number };
 
@@ -124,12 +142,16 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
   const load = async (id: string) => decodeState(await deps.store.get(sessionKey(id)));
   const save = async (id: string, s: SessionState) => deps.store.set(sessionKey(id), JSON.stringify(s), "EX", ttl);
 
-  /** Produce (and log) a draft, move to reviewing, and build the read-back result. */
+  /**
+   * Produce (and log) a draft, move to reviewing, and build the read-back result.
+   * With `prevDraft` set (a correction), only the CHANGED blocks are read back (§7.6).
+   */
   async function produceDraft(
     sessionId: string,
     state: SessionState,
     type: LetterType,
     correction?: { instruction: string; previousBody: string[] },
+    prevDraft?: LetterDraft,
   ): Promise<LetterTurnResult> {
     const language = resolveLanguage(type, state.facts);
     const draft = await deps.draft(type, state.facts, { correction, language });
@@ -139,7 +161,13 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       : null;
     const next: SessionState = { ...state, phase: "reviewing", pendingFact: null, draft, draftId };
     await save(sessionId, next);
-    return { kind: "readback", draft, chunks: chunkReadback(draft), revisions: next.revisions, prompt: READBACK_PROMPT };
+
+    if (prevDraft) {
+      const changed = chunkChangedReadback(prevDraft, draft);
+      const chunks = changed.length > 0 ? [CHANGED_INTRO.ta, ...changed] : [NO_CHANGE_NEEDED.ta];
+      return { kind: "readback", draft, chunks, revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: true };
+    }
+    return { kind: "readback", draft, chunks: chunkReadback(draft), revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: false };
   }
 
   /** Gap loop step: ask the next missing required fact, or draft when complete (§7.4–7.5). */
@@ -157,9 +185,11 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     const state = await load(sessionId);
     const types = await deps.loadTypes();
 
-    // --- read-back phase: approval or correction (§7.6) -----------------------
+    // --- read-back phase: approve / correct / clarify (§7.6) ------------------
     if (state.phase === "reviewing" && state.draft) {
-      if (isApproval(text)) {
+      const reply = classifyReviewReply(text);
+
+      if (reply === "approve") {
         const hash = draftHash(state.draft);
         await deps.logApproval?.({
           sessionId,
@@ -179,6 +209,12 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         return result;
       }
 
+      // Neither a clear yes nor a stated change: ask, don't guess (§2.1). No re-draft,
+      // no revision burnt, no re-read — one short question.
+      if (reply === "unclear") {
+        return { kind: "clarify", prompt: CLARIFY_PROMPT, revisions: state.revisions };
+      }
+
       // A correction. Cap first: endless loops exhaust trust — offer a human (§7.6).
       if (state.revisions + 1 > cap) {
         return { kind: "escalate", reason: "revision_cap", revisions: state.revisions };
@@ -191,10 +227,13 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       };
       const type = resolveLetterType(types, withNew.typeId);
       if (!type) throw new Error("letter-type catalogue is empty — cannot draft");
-      return produceDraft(sessionId, withNew, type, {
-        instruction: text,
-        previousBody: state.draft.bodyParagraphs,
-      });
+      return produceDraft(
+        sessionId,
+        withNew,
+        type,
+        { instruction: text, previousBody: state.draft.bodyParagraphs },
+        state.draft,
+      );
     }
 
     // --- narration / gap phases ----------------------------------------------

@@ -57,6 +57,7 @@ describe("Madal WhatsApp renderer", () => {
       chunks: ["பகுதி ஒன்று", "பகுதி இரண்டு"],
       revisions: 0,
       prompt: { ta: "சரியா?", en: "Okay?" },
+      changedOnly: false,
     });
     await handler.handleText("911", "காமராஜர் தெரு");
     expect(orchestrator.handleTurn).toHaveBeenCalledWith("wa:911", "காமராஜர் தெரு");

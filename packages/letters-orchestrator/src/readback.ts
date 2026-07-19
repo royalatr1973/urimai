@@ -33,7 +33,7 @@ function draftBlocks(draft: LetterDraft): string[] {
 }
 
 /** Greedily merge blocks into chunks ≤ limit. A single oversize block is hard-split. */
-export function chunkReadback(draft: LetterDraft, limit = TTS_CHUNK_LIMIT): string[] {
+function chunkBlocks(blocks: string[], limit: number): string[] {
   const chunks: string[] = [];
   let current = "";
 
@@ -42,7 +42,7 @@ export function chunkReadback(draft: LetterDraft, limit = TTS_CHUNK_LIMIT): stri
     current = "";
   };
 
-  for (const block of draftBlocks(draft)) {
+  for (const block of blocks) {
     const pieces = block.length <= limit ? [block] : (block.match(new RegExp(`[\\s\\S]{1,${limit}}`, "g")) ?? []);
     for (const piece of pieces) {
       if (current.length === 0) current = piece;
@@ -55,6 +55,21 @@ export function chunkReadback(draft: LetterDraft, limit = TTS_CHUNK_LIMIT): stri
   }
   push();
   return chunks;
+}
+
+export function chunkReadback(draft: LetterDraft, limit = TTS_CHUNK_LIMIT): string[] {
+  return chunkBlocks(draftBlocks(draft), limit);
+}
+
+/**
+ * After a correction, re-read ONLY what changed (§7.6 — live testers heard the whole
+ * letter again on every loop and experienced it as "asking confirmation again and
+ * again"). Returns [] when the new draft's blocks are textually identical.
+ */
+export function chunkChangedReadback(prev: LetterDraft, next: LetterDraft, limit = TTS_CHUNK_LIMIT): string[] {
+  const before = new Set(draftBlocks(prev));
+  const changed = draftBlocks(next).filter((b) => !before.has(b));
+  return changed.length === 0 ? [] : chunkBlocks(changed, limit);
 }
 
 export { assembleLetterText };

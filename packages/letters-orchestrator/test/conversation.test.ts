@@ -57,12 +57,22 @@ describe("full letters conversation", () => {
     expect(t4b.draft.bodyParagraphs.join()).toContain("திருட்டு");
     expect(f.drafts).toHaveLength(1);
 
-    // Turn 5 — a correction: re-draft with the instruction, revision counted, logged.
+    // Turn 5a — an ambiguous reply gets ONE clarifying question: no re-draft, no
+    // revision burnt, no re-read (live-tester fix — the old loop re-read everything).
+    const t5a = await orch.handleTurn(sid, "ம்ம் அது வந்து");
+    expect(t5a.kind).toBe("clarify");
+    expect(f.drafts).toHaveLength(1);
+
+    // Turn 5 — a correction: re-draft with the instruction, revision counted, logged,
+    // and ONLY the changed part read back.
     f.queueExtract({});
-    const t5 = await orch.handleTurn(sid, "தேதியை சரியா சொல்லு — 18-07-2026 னு போடு");
+    const t5 = await orch.handleTurn(sid, "தேதியை மாத்துங்க — 18-07-2026 னு போடுங்க");
     expect(t5.kind).toBe("readback");
     if (t5.kind !== "readback") throw new Error("unreachable");
     expect(t5.revisions).toBe(1);
+    expect(t5.changedOnly).toBe(true);
+    expect(t5.chunks.join()).toContain("திருத்தம்"); // the changed paragraph is spoken...
+    expect(t5.chunks.join()).not.toContain("அனுப்புநர்"); // ...but the unchanged header is not
     expect(t5.draft.bodyParagraphs.join()).toContain("திருத்தம்");
     expect(f.drafts).toHaveLength(2);
 

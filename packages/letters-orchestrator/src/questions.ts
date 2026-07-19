@@ -83,10 +83,27 @@ export const LISTEN_PROMPT: LetterQuestion = {
   en: "Tell me what happened and what you want, in your own words. I'll listen and prepare the letter.",
 };
 
-/** The read-back closing question — §7.6. */
+/** The read-back closing question — §7.6, with HOW to answer spelled out. */
 export const READBACK_PROMPT: LetterQuestion = {
-  ta: "ஏதாவது மாற்ற வேண்டுமா, அல்லது இப்படியே அனுப்பலாமா?",
-  en: "Should I change anything, or is this okay to send?",
+  ta: "கடிதம் சரியென்றால் 'சரி' என்று சொல்லுங்கள். ஏதாவது மாற்ற வேண்டுமானால், என்ன மாற்ற வேண்டும் என்று சொல்லுங்கள்.",
+  en: "If the letter is okay, say 'okay'. If something should change, tell me what to change.",
+};
+
+/** After a changed-part re-read. */
+export const CHANGED_INTRO: LetterQuestion = {
+  ta: "மாற்றிய பகுதி இதோ:",
+  en: "Here is the changed part:",
+};
+
+export const NO_CHANGE_NEEDED: LetterQuestion = {
+  ta: "கடிதத்தில் அந்த விவரம் ஏற்கனவே அப்படியே உள்ளது — மாற்றம் தேவைப்படவில்லை.",
+  en: "The letter already reads that way — no change was needed.",
+};
+
+/** When the review reply is neither a clear yes nor a stated change (§2.1 — never guess). */
+export const CLARIFY_PROMPT: LetterQuestion = {
+  ta: "மன்னிக்கவும், சரியாகப் புரியவில்லை. கடிதம் சரியென்றால் 'சரி' என்று மட்டும் சொல்லுங்கள்; மாற்ற வேண்டியிருந்தால், எதை எப்படி மாற்ற வேண்டும் என்று சொல்லுங்கள்.",
+  en: "Sorry, I didn't quite catch that. If the letter is okay, just say 'okay'; if not, tell me what to change and how.",
 };
 
 /** Type confirmation — §7.3, plain words, no jargon. */

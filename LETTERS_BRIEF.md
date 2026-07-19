@@ -91,6 +91,8 @@ session ends or the user says the reset word. The router lives in the channel ha
 - **`packages/letters-drafter`** — given `LetterType` + `LetterFacts`, calls Claude to write
   body paragraphs, assembles the full letter deterministically. Returns structured
   `LetterDraft` (blocks, not one blob) so read-back can be chunked under the TTS limit.
+- **`packages/addressee-directory`** — the government-office directory (DB-backed, versioned,
+  like schemes). Resolves *letter type + jurisdiction* → **To-address + CC list**. See §6a.
 - **`packages/docgen`** — `LetterDraft` → `.docx` (via the `docx` npm package) and `.pdf`.
   **Tamil rendering is the trap:** the PDF must embed a Tamil Unicode font (Noto Sans Tamil)
   and shape it correctly. Preferred route: render HTML → PDF via headless Chromium
@@ -173,6 +175,71 @@ prompts — do not merge them into one mega-prompt.
 
 ---
 
+## 6a. Addressee directory — offices are data too
+
+The user should never have to know *who* to write to. The directory answers that
+deterministically. Same discipline as schemes: every record versioned, `source` URL,
+`verified: false` until a human checks it. **No LLM anywhere in resolution.**
+
+```ts
+// A government office — the To/CC asset. DB-backed, versioned, human-verified.
+type Office = {
+  id: string;                  // "tn_cm_cell", "tn_dgp", "dist_collector_madurai", ...
+  designation: string;         // "The District Collector" — the OFFICE, never a person's name
+  designationTamil: string;
+  department: string;          // "Revenue", "Police", "Municipal Administration", ...
+  addressLines: string[];      // postal address, one entry per printed line
+  pincode: string;
+  phone?: string;              // spoken to the user if they want to follow up
+  email?: string;
+  jurisdiction: {
+    level: "state" | "district" | "taluk" | "municipality";
+    state: "TN";
+    district?: string;         // present iff level != "state"
+    taluk?: string;
+  };
+  handles: string[];           // letterTypeIds this office is a valid To-address for
+  ccFor: string[];             // letterTypeIds where this office belongs on the CC list
+  contactPerson?: string;      // optional, expected to go stale — never required
+  version: number;
+  source: string;              // official URL the address was taken from
+  verified: boolean;           // false until a human confirms against the source
+  lastCheckedAt?: string;
+};
+
+// Pure function, no I/O, no LLM — unit-test it like the rules engine.
+// Picks the most specific office (taluk > municipality > district > state) whose
+// `handles` includes the letter type; CC list from `ccFor` + the type's escalation chain.
+function resolveAddressees(
+  letterTypeId: string,
+  district: string | null,
+  offices: Office[],
+): { to: Office | null; cc: Office[] };
+```
+
+Rules for this directory:
+
+1. **Designations, not people.** "The Superintendent of Police, Madurai District" outlives
+   every transfer. `contactPerson` is cosmetic; a stale one must never block a letter.
+2. **Fallback chain, never a dead end.** No district match → state-level office. No match at
+   all → CM's Special Cell (`tn_cm_cell`), which accepts any grievance — so `to` is null only
+   if the directory is empty. The old free-text `addresseeHint` remains the last resort.
+3. **The gap loop shrinks.** With the directory, `addressee_*` facts are no longer asked —
+   only the user's **district** (already known if the session did an Urimai flow — reuse it).
+   User-supplied addressee details, when volunteered, override the directory.
+4. **Unverified records still work, honestly.** An unverified address prints normally but the
+   voice caption says "please confirm the address at the office / on the website" until a
+   curator marks it `verified`.
+5. **Staleness is managed, not assumed away.** `lastCheckedAt` + a curator re-check list
+   (offices unchecked for > 12 months surface first). Wrong-address reports from users
+   escalate to the curator queue.
+6. **Seed data:** `packages/addressee-directory/seed/offices.seed.json` — state-level TN
+   offices to start (see the CSV in `data/`), every record `verified: false` with its source
+   URL. District rows (38 Collectors, SPs, Corporation Commissioners) are a later curation
+   pass, not code.
+
+---
+
 ## 7. Conversation flow (the spec to test against)
 
 1. **Route.** Fresh session → greeting asks schemes vs letter (§3). User picks letter.
@@ -182,8 +249,9 @@ prompts — do not merge them into one mega-prompt.
    every `LetterFacts` field already present. Confirm the type by voice in plain words:
    *"You want a complaint to the police about X — correct?"*
 4. **Gap loop.** Ask for missing `requiredFacts` **one question at a time** (reuse the
-   pendingField pattern). Never re-ask what's known. "I don't know" is an acceptable answer
-   for optional facts and for addressee details (use `addresseeHint` default).
+   pendingField pattern). Never re-ask what's known. Addressee details are NOT asked —
+   ask only the district, then `resolveAddressees()` fills To + CC (§6a). "I don't know"
+   is an acceptable answer for optional facts.
 5. **Draft.** Generate `LetterDraft`. Body must use only extracted facts (§2.2).
 6. **Read-back loop.** TTS the draft in blocks (respect the 1500-char TTS limit — chunk on
    paragraph boundaries). Then ask: *"Should I change anything, or is this okay?"* A correction
@@ -235,6 +303,14 @@ a full voice-driven letter ending in received .pdf + .docx; "help" escalates fro
 with per-block edit, download buttons. Serves literate users and operators.
 *Accept:* full letter produced end-to-end in the browser against the real backend; no API key
 client-side.
+
+**Phase 5a — Addressee directory.** `packages/addressee-directory`: Prisma model, seed loader
+for `data/tn_offices_seed.csv` → `offices.seed.json`, pure `resolveAddressees()`, wired into
+the orchestrator (replaces the addressee gap questions with the single district question),
+unverified-address voice caveat, and the CC block rendered in docgen.
+*Accept:* unit tests cover specificity ordering (taluk > district > state), the CM-Cell
+fallback, user-override, and unverified caveat; a letter generated end-to-end carries a
+correct To block and CC list from seed data alone; no LLM call in resolution.
 
 **Phase 6 — PII lifecycle + audit hardening.** Encryption at rest for facts/drafts/documents,
 30-day retention sweep, "delete my details" voice command, immutable draft/approval audit.

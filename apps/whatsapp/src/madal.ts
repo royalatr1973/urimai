@@ -61,6 +61,9 @@ export function createMadalHandler(deps: MadalHandlerDeps) {
       case "question":
         await deps.speak(from, r.question.ta);
         return;
+      case "clarify":
+        await deps.speak(from, r.prompt.ta);
+        return;
       case "readback":
         // The full letter, spoken in TTS-safe chunks, then the change-or-okay question.
         for (const chunk of r.chunks) await deps.speak(from, chunk);
