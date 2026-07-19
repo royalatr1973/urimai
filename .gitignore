@@ -26,3 +26,6 @@ pnpm-debug.log*
 !.vscode/extensions.json
 apps/whatsapp/.live/
 dump.rdb
+
+# docgen golden sample outputs (for human eyeballing; the checked-in golden is test/golden/)
+packages/docgen/.golden-out/
