@@ -13,12 +13,10 @@ import type { TurnResult } from "@urimai/orchestrator";
 import type { Scheme } from "@urimai/types";
 import { documentChecklistTextTamil, renderDocumentCardSvg } from "./card.js";
 import { CARDS_INTRO_TAMIL, CONDITION_CARDS, loadCardImage } from "./cards.js";
-import { isHelpRequest, isResetRequest } from "./help.js";
+import { isHelpRequest, isResetRequest, type EscalationQueue } from "@urimai/escalation";
 import { buildProgressRecapTamil, buildResultsSummaryTamil } from "./reply.js";
-import type { EscalationQueue } from "./escalation.js";
-import type { SpeechProvider } from "./speech.js";
-import type { Transcoder } from "./transcode.js";
-import type { InboundMessage, WhatsAppClient } from "./whatsapp.js";
+import type { SpeechProvider, Transcoder } from "@urimai/speech";
+import type { InboundMessage, WhatsAppClient } from "@urimai/whatsapp-client";
 
 /** Just the slice of the orchestrator the channel uses — proves it's reused, not modified. */
 export interface OrchestratorLike {

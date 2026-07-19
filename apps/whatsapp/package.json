@@ -14,8 +14,11 @@
   "dependencies": {
     "@urimai/cache": "workspace:*",
     "@urimai/db": "workspace:*",
+    "@urimai/escalation": "workspace:*",
     "@urimai/orchestrator": "workspace:*",
+    "@urimai/speech": "workspace:*",
     "@urimai/types": "workspace:*",
+    "@urimai/whatsapp-client": "workspace:*",
     "fastify": "^5.1.0"
   },
   "devDependencies": {

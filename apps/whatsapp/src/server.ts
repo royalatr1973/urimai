@@ -8,9 +8,8 @@ import Fastify from "fastify";
 import { listLatestSchemes, DbEscalationQueue } from "@urimai/db";
 import { createDefaultOrchestrator } from "@urimai/orchestrator";
 import { createMessageHandler, type MessageHandler } from "./handler.js";
-import { createSpeechProvider, type SpeechConfig } from "./speech.js";
-import { transcodeOggToWav, transcodeWavToOggOpus } from "./transcode.js";
-import { MetaWhatsAppClient, parseInbound, verifyChallenge, verifySignature } from "./whatsapp.js";
+import { createSpeechProvider, transcodeOggToWav, transcodeWavToOggOpus, type SpeechConfig } from "@urimai/speech";
+import { MetaWhatsAppClient, parseInbound, verifyChallenge, verifySignature } from "@urimai/whatsapp-client";
 
 const env = process.env;
 const VERIFY_TOKEN = env.WHATSAPP_VERIFY_TOKEN ?? "";

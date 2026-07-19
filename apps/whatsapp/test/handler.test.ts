@@ -3,8 +3,8 @@ import { SEED_SCHEMES } from "@urimai/db";
 import type { TurnResult } from "@urimai/orchestrator";
 import type { Verdict } from "@urimai/types";
 import { createMessageHandler } from "../src/handler.js";
-import type { SpeechProvider } from "../src/speech.js";
-import type { WhatsAppClient } from "../src/whatsapp.js";
+import type { SpeechProvider } from "@urimai/speech";
+import type { WhatsAppClient } from "@urimai/whatsapp-client";
 
 function fakeWhatsApp() {
   return {

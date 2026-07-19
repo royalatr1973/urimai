@@ -122,6 +122,71 @@ export type Verdict = {
   ruleVersion: number; // logged to audit
 };
 
+// ---------------------------------------------------------------------------
+// Madal (letters) domain types — LETTERS_BRIEF.md §6.
+//
+// Design invariants (enforced elsewhere, documented here):
+//  - The LLM drafts; the USER decides. Nothing is delivered without explicit,
+//    logged approval.
+//  - Legal citations come ONLY from the LetterType record, never from the model.
+//  - The letter skeleton is rendered deterministically; the LLM writes only
+//    body paragraphs, and only from facts the user actually said.
+// ---------------------------------------------------------------------------
+
+/** A fact the letter flow can collect. The gap loop asks for missing required ones. */
+export type FactKey =
+  | "sender_name"
+  | "sender_address"
+  | "sender_phone"
+  | "addressee_name"
+  | "addressee_office"
+  | "addressee_address"
+  | "subject"
+  | "incident_date"
+  | "incident_place"
+  | "incident_details"
+  | "prior_attempts"
+  | "amount"
+  | "reference_ids"
+  | "relief_sought"
+  | "attachments";
+
+/** A letter type — the asset. DB-backed, versioned, human-verified, like Scheme. */
+export type LetterType = {
+  id: string; // "rti_request" | "police_complaint" | ... | "generic_petition"
+  nameTamil: string;
+  nameEnglish: string;
+  addresseeHint: string; // who this normally goes to; drives the addressee question
+  requiredFacts: FactKey[]; // gap loop asks these, one at a time
+  optionalFacts: FactKey[];
+  languageDefault: "ta" | "en" | "bilingual";
+  legalRefs: { label: string; citation: string; source: string }[]; // ONLY source of citations
+  bodyGuidance: string; // tone/structure notes injected into the drafting prompt
+  version: number;
+  verified: boolean; // false until a human reviews the template + refs
+};
+
+/** What we learn from the user. All nullable; the gap loop fills required ones. */
+export type LetterFacts = Partial<Record<FactKey, string>> & {
+  letterTypeId: string | null; // classified, user-confirmable
+  language: "ta" | "en" | "bilingual" | null;
+};
+
+/** Structured draft — blocks, so read-back can chunk and corrections can target a block. */
+export type LetterDraft = {
+  letterTypeId: string;
+  typeVersion: number;
+  senderBlock: string;
+  date: string;
+  addresseeBlock: string;
+  subject: string;
+  salutation: string;
+  bodyParagraphs: string[]; // the ONLY LLM-authored part
+  closing: string;
+  signatureLine: string; // supports thumb-impression wording
+  language: "ta" | "en" | "bilingual";
+};
+
 /** An empty profile — the safe fallback when nothing is known yet. */
 export const EMPTY_PROFILE: Profile = {
   age: null,

@@ -6,6 +6,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { SEED_SCHEMES } from "../src/seed-data.js";
+import { SEED_LETTER_TYPES } from "../src/letter-seed-data.js";
 
 const prisma = new PrismaClient();
 
@@ -42,6 +43,37 @@ async function main() {
   const count = await prisma.scheme.count();
   console.log(`\nDone. ${count} scheme rows in the database.`);
   console.log("Reminder: confirm GO numbers + the open items in seed-data.ts before production.");
+
+  console.log("\nSeeding Madal letter types (ALL unverified — curator review pending)...\n");
+
+  for (const t of SEED_LETTER_TYPES) {
+    const data = {
+      nameTamil: t.nameTamil,
+      nameEnglish: t.nameEnglish,
+      addresseeHint: t.addresseeHint,
+      requiredFacts: t.requiredFacts as unknown as object,
+      optionalFacts: t.optionalFacts as unknown as object,
+      languageDefault: t.languageDefault,
+      legalRefs: t.legalRefs as unknown as object,
+      bodyGuidance: t.bodyGuidance,
+      source: "LETTERS_BRIEF.md seed set (curator review pending)",
+      verified: t.verified,
+    };
+    await prisma.letterType.upsert({
+      where: { key_version: { key: t.id, version: t.version } },
+      update: data,
+      create: { key: t.id, version: t.version, ...data },
+    });
+    console.log(`  ✓ ${t.id}  (v${t.version}, verified: ${t.verified})`);
+  }
+
+  const keepTypes = SEED_LETTER_TYPES.map((t) => t.id);
+  const removedTypes = await prisma.letterType.deleteMany({ where: { key: { notIn: keepTypes } } });
+  if (removedTypes.count > 0) console.log(`\n  – removed ${removedTypes.count} stale letter-type row(s)`);
+
+  const typeCount = await prisma.letterType.count();
+  console.log(`\nDone. ${typeCount} letter-type rows in the database.`);
+  console.log("Reminder: every letter type is verified:false — addressee formats and legal refs need human sign-off.");
 }
 
 main()

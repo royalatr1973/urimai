@@ -81,6 +81,76 @@ model BeneficiaryRecord {
   @@map("beneficiary_records")
 }
 
+// ---------------------------------------------------------------------------
+// Madal (letters) — Phase 0 scaffold (LETTERS_BRIEF.md §6).
+// LetterType is the versioned, human-verified asset (like Scheme). Drafts and
+// approvals are written from Phase 3 onward; PII encryption + the 30-day
+// retention sweep over drafts land in Madal Phase 6.
+// ---------------------------------------------------------------------------
+
+/// A letter type — the asset. Versioned; legal citations come ONLY from here,
+/// never from the model. `verified` stays false until a human reviews the
+/// template + references.
+model LetterType {
+  id              String   @id @default(cuid())
+  key             String // stable identifier, e.g. "rti_request", "generic_petition"
+  version         Int      @default(1)
+
+  nameTamil       String
+  nameEnglish     String
+  addresseeHint   String // who this normally goes to; drives the addressee question
+  requiredFacts   Json // FactKey[] — gap loop asks these, one at a time
+  optionalFacts   Json // FactKey[]
+  languageDefault String   @default("ta") // "ta" | "en" | "bilingual"
+  legalRefs       Json // [{label, citation, source}] — the ONLY source of citations
+  bodyGuidance    String   @default("") // tone/structure notes for the drafting prompt
+
+  source          String   @default("") // where the template/addressee format came from
+  verified        Boolean  @default(false) // false until a human signs off
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([key, version])
+  @@index([key])
+  @@map("letter_types")
+}
+
+/// One drafted letter revision. `draft` holds the structured LetterDraft blocks
+/// (senderBlock, addresseeBlock, subject, bodyParagraphs, ...). Contains PII —
+/// Madal Phase 6 adds encryption at rest + the retention sweep.
+model LetterDraft {
+  id            String           @id @default(cuid())
+  sessionId     String
+  letterTypeKey String
+  typeVersion   Int
+  revision      Int              @default(0)
+  language      String // "ta" | "en" | "bilingual"
+  draft         Json
+  draftHash     String // sha256 of the assembled letter text
+  createdAt     DateTime         @default(now())
+  approvals     LetterApproval[]
+
+  @@index([sessionId])
+  @@map("letter_drafts")
+}
+
+/// The user's explicit approval of a draft — no document is ever delivered
+/// without one. The approval utterance (their spoken/typed "yes") is logged.
+model LetterApproval {
+  id                 String      @id @default(cuid())
+  sessionId          String
+  draftId            String
+  draft              LetterDraft @relation(fields: [draftId], references: [id])
+  draftHash          String // sha256 of the final text the user approved
+  approvalUtterance  String // transcript of the "yes"
+  revisions          Int // how many correction loops before approval
+  approvedAt         DateTime    @default(now())
+
+  @@index([sessionId])
+  @@map("letter_approvals")
+}
+
 /// Human-safety-net escalation ticket. Contact + message are encrypted (PII).
 model Escalation {
   id         String    @id @default(cuid())

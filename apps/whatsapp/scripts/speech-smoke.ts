@@ -9,8 +9,7 @@
  *   3. ASR: synthesize a known Tamil sentence, feed it back → compare transcript
  */
 import { writeFileSync, mkdirSync } from "node:fs";
-import { createSpeechProvider } from "../src/speech.js";
-import { transcodeWavToOggOpus, transcodeOggToWav } from "../src/transcode.js";
+import { createSpeechProvider, transcodeWavToOggOpus, transcodeOggToWav } from "@urimai/speech";
 
 const env = process.env;
 const TEST_SENTENCE = "எனக்கு வயது அறுபத்தேழு, நான் ஒரு விதவை"; // "I am 67, I am a widow"

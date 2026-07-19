@@ -100,12 +100,21 @@ importers:
       '@urimai/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@urimai/escalation':
+        specifier: workspace:*
+        version: link:../../packages/escalation
       '@urimai/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
+      '@urimai/speech':
+        specifier: workspace:*
+        version: link:../../packages/speech
       '@urimai/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@urimai/whatsapp-client':
+        specifier: workspace:*
+        version: link:../../packages/whatsapp-client
       fastify:
         specifier: ^5.1.0
         version: 5.8.5
@@ -183,6 +192,22 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
 
+  packages/escalation:
+    dependencies:
+      '@urimai/cache':
+        specifier: workspace:*
+        version: link:../cache
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
+
   packages/extractor:
     dependencies:
       '@anthropic-ai/sdk':
@@ -245,11 +270,35 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
 
+  packages/speech:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
+
   packages/types:
     devDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
+
+  packages/whatsapp-client:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
 
 packages:
 
