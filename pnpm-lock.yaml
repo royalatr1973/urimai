@@ -283,6 +283,25 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
 
+  packages/letters-drafter:
+    dependencies:
+      '@anthropic-ai/sdk':
+        specifier: ^0.106.0
+        version: 0.106.0(zod@3.25.76)
+      '@urimai/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
+
   packages/letters-extractor:
     dependencies:
       '@anthropic-ai/sdk':
@@ -301,6 +320,46 @@ importers:
       '@urimai/letter-types':
         specifier: workspace:*
         version: link:../letter-types
+      dotenv-cli:
+        specifier: ^7.4.2
+        version: 7.4.4
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.4
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
+
+  packages/letters-orchestrator:
+    dependencies:
+      '@urimai/cache':
+        specifier: workspace:*
+        version: link:../cache
+      '@urimai/db':
+        specifier: workspace:*
+        version: link:../db
+      '@urimai/docgen':
+        specifier: workspace:*
+        version: link:../docgen
+      '@urimai/letter-types':
+        specifier: workspace:*
+        version: link:../letter-types
+      '@urimai/letters-drafter':
+        specifier: workspace:*
+        version: link:../letters-drafter
+      '@urimai/letters-extractor':
+        specifier: workspace:*
+        version: link:../letters-extractor
+      '@urimai/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
       dotenv-cli:
         specifier: ^7.4.2
         version: 7.4.4

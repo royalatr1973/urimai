@@ -19,6 +19,8 @@
     "schemes:list": "pnpm --filter @urimai/db schemes:list",
     "extract:smoke": "pnpm --filter @urimai/extractor extract:smoke",
     "sim": "pnpm --filter @urimai/orchestrator sim",
+    "letters:sim": "pnpm --filter @urimai/letters-orchestrator sim",
+    "letters:smoke": "pnpm --filter @urimai/letters-extractor letters:smoke",
     "api:dev": "pnpm --filter @urimai/api dev",
     "web:dev": "pnpm --filter @urimai/web dev",
     "web:build": "pnpm --filter @urimai/web build",

@@ -50,6 +50,7 @@ export async function listLatestSchemes(): Promise<Scheme[]> {
 export { SEED_SCHEMES } from "./seed-data.js";
 export { SEED_LETTER_TYPES } from "./letter-seed-data.js";
 export { toLetterType, listLatestLetterTypes, type LetterTypeRow } from "./letter-types.js";
+export { saveLetterDraft, saveLetterApproval, type DraftLogInput, type ApprovalLogInput } from "./letters.js";
 export { getPrisma, PrismaClient } from "./client.js";
 export { encryptString, decryptString, encryptJson, decryptJson, getPiiKey, getKeyring, type Keyring } from "./crypto.js";
 export { writeAudit, listAudit, type AuditEntry } from "./audit.js";
