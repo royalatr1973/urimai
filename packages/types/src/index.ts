@@ -151,6 +151,25 @@ export type FactKey =
   | "relief_sought"
   | "attachments";
 
+/** Every collectable fact key, in canonical order — for validation and prompt building. */
+export const FACT_KEYS: FactKey[] = [
+  "sender_name",
+  "sender_address",
+  "sender_phone",
+  "addressee_name",
+  "addressee_office",
+  "addressee_address",
+  "subject",
+  "incident_date",
+  "incident_place",
+  "incident_details",
+  "prior_attempts",
+  "amount",
+  "reference_ids",
+  "relief_sought",
+  "attachments",
+];
+
 /** A letter type — the asset. DB-backed, versioned, human-verified, like Scheme. */
 export type LetterType = {
   id: string; // "rti_request" | "police_complaint" | ... | "generic_petition"
