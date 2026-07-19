@@ -7,6 +7,9 @@
  * and is re-exported for compatibility.
  */
 export { createMessageHandler, type HandlerDeps, type MessageHandler, type OrchestratorLike } from "./handler.js";
+export { createAppRouter, detectAppIntent, type AppRoute, type AppRouter, type RouteStore, type RouterDeps } from "./router.js";
+export { createMadalHandler, type MadalHandler, type MadalHandlerDeps, type LettersOrchestratorLike } from "./madal.js";
+export { createSpeaker, createTranscriber, type VoiceDeps } from "./voice.js";
 export { renderDocumentCardSvg } from "./card.js";
 export { buildResultsSummaryTamil } from "./reply.js";
 export {

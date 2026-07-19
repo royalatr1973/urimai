@@ -14,7 +14,9 @@
   "dependencies": {
     "@urimai/cache": "workspace:*",
     "@urimai/db": "workspace:*",
+    "@urimai/docgen": "workspace:*",
     "@urimai/escalation": "workspace:*",
+    "@urimai/letters-orchestrator": "workspace:*",
     "@urimai/orchestrator": "workspace:*",
     "@urimai/speech": "workspace:*",
     "@urimai/types": "workspace:*",

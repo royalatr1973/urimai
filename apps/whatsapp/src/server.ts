@@ -5,9 +5,15 @@
  * fast and avoid delivery retries.
  */
 import Fastify from "fastify";
+import { getRedis } from "@urimai/cache";
 import { listLatestSchemes, DbEscalationQueue } from "@urimai/db";
+import { draftToDocx, draftToPdf } from "@urimai/docgen";
+import { createDefaultLettersOrchestrator } from "@urimai/letters-orchestrator";
 import { createDefaultOrchestrator } from "@urimai/orchestrator";
-import { createMessageHandler, type MessageHandler } from "./handler.js";
+import { createMessageHandler } from "./handler.js";
+import { createMadalHandler } from "./madal.js";
+import { createAppRouter, type AppRouter } from "./router.js";
+import { createSpeaker, createTranscriber } from "./voice.js";
 import { createSpeechProvider, transcodeOggToWav, transcodeWavToOggOpus, type SpeechConfig } from "@urimai/speech";
 import { MetaWhatsAppClient, parseInbound, verifyChallenge, verifySignature } from "@urimai/whatsapp-client";
 
@@ -15,7 +21,7 @@ const env = process.env;
 const VERIFY_TOKEN = env.WHATSAPP_VERIFY_TOKEN ?? "";
 const APP_SECRET = env.WHATSAPP_APP_SECRET ?? "";
 
-function buildHandler(): { handler: MessageHandler | null; reason?: string } {
+function buildHandler(): { handler: AppRouter | null; reason?: string } {
   if (!env.WHATSAPP_PHONE_NUMBER_ID || !env.WHATSAPP_ACCESS_TOKEN) {
     return { handler: null, reason: "WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_ACCESS_TOKEN not set" };
   }
@@ -36,19 +42,56 @@ function buildHandler(): { handler: MessageHandler | null; reason?: string } {
     console.warn("[whatsapp] no speech provider configured — running TEXT-ONLY until Bhashini/Sarvam keys are set");
   }
   try {
-    const handler = createMessageHandler({
-      // Short TTL: a shared phone serves many people, so a stale profile should age out
-      // fast between beneficiaries (plus the explicit "new person" reset command).
+    const whatsapp = new MetaWhatsAppClient({ phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID, accessToken: env.WHATSAPP_ACCESS_TOKEN });
+    const escalation = new DbEscalationQueue(); // help tickets persist (encrypted) for the operator view
+    const voice = { speech, whatsapp, transcode: transcodeOggToWav, transcodeOut: transcodeWavToOggOpus };
+    const speak = createSpeaker(voice);
+
+    // Urimai: the existing channel handler, reused unchanged (consent gate and all).
+    // Short TTL: a shared phone serves many people, so a stale profile should age out
+    // fast between beneficiaries (plus the explicit "new person" reset command).
+    const urimai = createMessageHandler({
       orchestrator: createDefaultOrchestrator({ channel: "whatsapp", ttlSeconds: 30 * 60 }),
       speech,
-      whatsapp: new MetaWhatsAppClient({ phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID, accessToken: env.WHATSAPP_ACCESS_TOKEN }),
+      whatsapp,
       transcode: transcodeOggToWav,
       transcodeOut: transcodeWavToOggOpus,
       loadSchemes: () => listLatestSchemes(),
-      escalation: new DbEscalationQueue(), // help tickets persist (encrypted) for the operator view
+      escalation,
       helplineText: env.HELPLINE_TEXT,
     });
-    return { handler };
+
+    // Madal: letters flow behind the SAME number (LETTERS_BRIEF §3). onComplete clears
+    // the route so the next contact is greeted fresh (router assigned just below).
+    let router: AppRouter;
+    const madal = createMadalHandler({
+      orchestrator: createDefaultLettersOrchestrator({ ttlSeconds: 30 * 60 }),
+      whatsapp,
+      speak,
+      escalation,
+      makePdf: (draft) => draftToPdf(draft),
+      makeDocx: (draft) => draftToDocx(draft),
+      onComplete: (from) => Promise.resolve(router.clearRoute(from)).then(() => undefined),
+      helplineText: env.HELPLINE_TEXT,
+    });
+
+    const redis = getRedis();
+    router = createAppRouter({
+      routeStore: {
+        get: (key) => redis.get(key),
+        set: (key, value, mode, ttl) => redis.set(key, value, mode, ttl),
+        del: (key) => redis.del(key),
+      },
+      toText: createTranscriber(voice),
+      speak,
+      urimai,
+      madal,
+      escalation,
+      whatsapp,
+      helplineText: env.HELPLINE_TEXT,
+      ttlSeconds: 30 * 60,
+    });
+    return { handler: router };
   } catch (e) {
     return { handler: null, reason: e instanceof Error ? e.message : String(e) };
   }

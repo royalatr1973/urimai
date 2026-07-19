@@ -66,6 +66,8 @@ export interface WhatsAppClient {
   sendText(to: string, text: string): Promise<void>;
   sendAudio(to: string, audio: Buffer, mimeType?: string): Promise<void>;
   sendImage(to: string, image: Buffer, mimeType?: string, caption?: string): Promise<void>;
+  /** Send a file as a WhatsApp document (shows filename + caption; user can forward/print). */
+  sendDocument(to: string, doc: Buffer, filename: string, mimeType: string, caption?: string): Promise<void>;
 }
 
 export interface MetaConfig {
@@ -123,5 +125,9 @@ export class MetaWhatsAppClient implements WhatsAppClient {
   async sendImage(to: string, image: Buffer, mimeType = "image/png", caption?: string): Promise<void> {
     const id = await this.uploadMedia(image, mimeType, "card.png");
     await this.send({ to, type: "image", image: { id, ...(caption ? { caption } : {}) } });
+  }
+  async sendDocument(to: string, doc: Buffer, filename: string, mimeType: string, caption?: string): Promise<void> {
+    const id = await this.uploadMedia(doc, mimeType, filename);
+    await this.send({ to, type: "document", document: { id, filename, ...(caption ? { caption } : {}) } });
   }
 }

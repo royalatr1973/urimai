@@ -100,9 +100,15 @@ importers:
       '@urimai/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@urimai/docgen':
+        specifier: workspace:*
+        version: link:../../packages/docgen
       '@urimai/escalation':
         specifier: workspace:*
         version: link:../../packages/escalation
+      '@urimai/letters-orchestrator':
+        specifier: workspace:*
+        version: link:../../packages/letters-orchestrator
       '@urimai/orchestrator':
         specifier: workspace:*
         version: link:../../packages/orchestrator
