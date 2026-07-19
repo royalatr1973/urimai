@@ -5,7 +5,7 @@
  * user's own words. Drafting never throws and never ships invented content.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import type { LetterDraft, LetterFacts, LetterType } from "@urimai/types";
+import type { LetterDraft, LetterFacts, LetterType, Office } from "@urimai/types";
 import { buildFallbackBody } from "./fallback.js";
 import { checkBodyAgainstFacts } from "./guard.js";
 import { buildDraftUserPrompt, DRAFT_SYSTEM_PROMPT, type CorrectionContext } from "./prompt.js";
@@ -44,6 +44,10 @@ export interface DraftOptions {
   date?: string;
   /** Read-back correction: the change the user asked for, plus the body it applies to. */
   correction?: CorrectionContext;
+  /** Directory office to address the letter TO when the user named none (curator data). */
+  toOffice?: Office | null;
+  /** Directory offices to CC (நகல்) per the curator's ccFor mapping. */
+  ccOffices?: Office[];
 }
 
 export interface DraftOutcome {
@@ -124,13 +128,13 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
       typeVersion: type.version,
       senderBlock: buildSenderBlock(facts),
       date,
-      addresseeBlock: buildAddresseeBlock(type, facts),
+      addresseeBlock: buildAddresseeBlock(type, facts, opts.toOffice),
       subject: buildSubject(type, facts, language),
       salutation: buildSalutation(language),
       bodyParagraphs,
       closing: buildClosing(language),
       signatureLine: buildSignatureLine(facts, language),
-      copyTo: buildCopyTo(facts),
+      copyTo: buildCopyTo(facts, opts.ccOffices ?? []),
       disclaimer: buildDisclaimer(language),
       language,
     },

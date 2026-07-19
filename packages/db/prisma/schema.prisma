@@ -116,6 +116,39 @@ model LetterType {
   @@map("letter_types")
 }
 
+/// A curator-maintained government office — the addressee directory. Versioned and
+/// human-verified like schemes/letter types; the ONLY source of To/CC addresses the
+/// system may add on its own (never web search at runtime).
+model Office {
+  id               String   @id @default(cuid())
+  key              String // stable office identifier, e.g. "tn_cm_cell"
+  version          Int      @default(1)
+
+  designation      String
+  designationTamil String
+  department       String
+  addressLines     Json // string[]
+  pincode          String?
+  phone            String?
+  email            String?
+  level            String   @default("state") // state | district | taluk
+  district         String?
+
+  handles          Json // letter-type keys this office can receive (To)
+  ccFor            Json // letter-type keys this office should be copied on
+
+  source           String // official URL
+  verified         Boolean  @default(false)
+  notes            String   @default("")
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([key, version])
+  @@index([key])
+  @@map("offices")
+}
+
 /// One drafted letter revision. `draft` holds the structured LetterDraft blocks
 /// (senderBlock, addresseeBlock, subject, bodyParagraphs, ...). Contains PII —
 /// Madal Phase 6 adds encryption at rest + the retention sweep.

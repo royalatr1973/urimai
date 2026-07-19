@@ -13,5 +13,6 @@ export {
   hasAllRequiredFacts,
   resolveLanguage,
 } from "./catalogue.js";
-export { listLatestLetterTypes, toLetterType, SEED_LETTER_TYPES } from "@urimai/db";
-export type { FactKey, LetterFacts, LetterType } from "@urimai/types";
+export { hasUsableAddress, pickCcOffices, pickToOffice } from "./offices.js";
+export { listLatestLetterTypes, listLatestOffices, toLetterType, toOffice, SEED_LETTER_TYPES } from "@urimai/db";
+export type { FactKey, LetterFacts, LetterType, Office } from "@urimai/types";

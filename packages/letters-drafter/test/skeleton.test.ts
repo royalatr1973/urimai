@@ -22,13 +22,46 @@ describe("deterministic skeleton", () => {
     expect(draft.copyTo).toBeNull(); // CC only when the user names someone
   });
 
-  it("renders a copy-to line ONLY from the user's own words", async () => {
+  it("renders a copy-to line from the user's own words", async () => {
     const { draft } = await draftLetter(
       POLICE_TYPE,
       { ...FACTS, copy_to: "மாவட்ட காவல் கண்காணிப்பாளர் அலுவலகம்" },
       { client: okBody, date: "19-07-2026" },
     );
     expect(draft.copyTo).toBe("மாவட்ட காவல் கண்காணிப்பாளர் அலுவலகம்");
+  });
+
+  it("directory To-office fills the addressee when the user named none; user facts still win", async () => {
+    const dgp = {
+      id: "tn_dgp",
+      designation: "The DGP",
+      designationTamil: "காவல்துறை தலைமை இயக்குநர், தமிழ்நாடு",
+      department: "Home",
+      addressLines: ["Dr. Radhakrishnan Salai, Mylapore", "Chennai"],
+      pincode: "600004",
+      phone: null,
+      email: null,
+      level: "state",
+      district: null,
+      handles: ["police_complaint"],
+      ccFor: [],
+      version: 1,
+      source: "https://tn.gov.in",
+      verified: false,
+      notes: "",
+    };
+    const viaDirectory = await draftLetter(POLICE_TYPE, FACTS, { client: okBody, date: "19-07-2026", toOffice: dgp });
+    expect(viaDirectory.draft.addresseeBlock).toBe("காவல்துறை தலைமை இயக்குநர், தமிழ்நாடு\nDr. Radhakrishnan Salai, Mylapore\nChennai - 600004");
+
+    const userSaid = await draftLetter(
+      POLICE_TYPE,
+      { ...FACTS, addressee_office: "கடலூர் நகர காவல் நிலையம்" },
+      { client: okBody, date: "19-07-2026", toOffice: dgp },
+    );
+    expect(userSaid.draft.addresseeBlock).toBe("கடலூர் நகர காவல் நிலையம்"); // user wins
+
+    const cc = await draftLetter(POLICE_TYPE, { ...FACTS, copy_to: "வார்டு உறுப்பினர்" }, { client: okBody, date: "19-07-2026", ccOffices: [dgp] });
+    expect(cc.draft.copyTo).toBe("வார்டு உறுப்பினர்\nகாவல்துறை தலைமை இயக்குநர், தமிழ்நாடு, Dr. Radhakrishnan Salai, Mylapore, Chennai - 600004");
   });
 
   it("falls back to the addresseeHint (curator markers stripped) when the user knew no addressee", () => {

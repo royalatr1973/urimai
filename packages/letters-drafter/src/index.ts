@@ -19,6 +19,8 @@ export {
   buildSignatureLine,
   buildSubject,
   formatDate,
+  officeAddressBlock,
+  officeCcLine,
   stripCuratorMarkers,
   type Language,
 } from "./skeleton.js";

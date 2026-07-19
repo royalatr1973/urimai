@@ -187,6 +187,31 @@ export type LetterType = {
   verified: boolean; // false until a human reviews the template + refs
 };
 
+/**
+ * A curator-maintained government office — the addressee directory (July 2026).
+ * DB-backed, versioned, human-verified like schemes and letter types. Used as the
+ * To-address when the user doesn't know the office, and as curated நகல் (CC)
+ * recipients per letter type. NEVER filled from web search at runtime.
+ */
+export type Office = {
+  id: string; // stable key, e.g. "tn_cm_cell"
+  designation: string;
+  designationTamil: string;
+  department: string;
+  addressLines: string[];
+  pincode: string | null;
+  phone: string | null;
+  email: string | null;
+  level: string; // "state" | "district" | "taluk"
+  district: string | null; // null for state-level
+  handles: string[]; // letter-type ids this office can receive (To)
+  ccFor: string[]; // letter-type ids this office should be copied on
+  version: number;
+  source: string; // official URL the entry was taken from
+  verified: boolean; // false until a human confirms designation + address
+  notes: string;
+};
+
 /** What we learn from the user. All nullable; the gap loop fills required ones. */
 export type LetterFacts = Partial<Record<FactKey, string>> & {
   letterTypeId: string | null; // classified, user-confirmable

@@ -99,6 +99,23 @@ describe("full letters conversation", () => {
     expect(r.typeId).toBe("generic_petition");
   });
 
+  it("'நகல் வேண்டாம்' at read-back drops the curated CC and reports the removal", async () => {
+    const f = makeFakeDeps("generic_petition");
+    const orch = createLettersOrchestrator(f.deps);
+    const sid = "cc";
+    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்" });
+    await orch.handleTurn(sid, "மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
+    const rb = await orch.handleTurn(sid, "ஆம்");
+    if (rb.kind !== "readback") throw new Error(`expected readback, got ${rb.kind}`);
+    expect(rb.draft.copyTo).toContain("நகல்-அலுவலகம்"); // curated CC present by default
+
+    f.queueExtract({});
+    const r = await orch.handleTurn(sid, "நகல் வேண்டாம்");
+    if (r.kind !== "readback") throw new Error(`expected readback, got ${r.kind}`);
+    expect(r.draft.copyTo).toBeNull();
+    expect(r.chunks.join()).toContain("நீக்கிவிட்டேன்"); // removal acknowledged, not "no change"
+  });
+
   it("'தெரியலை' on an asked fact skips it (blank later) and moves on without re-asking", async () => {
     const f = makeFakeDeps("civic_grievance");
     const orch = createLettersOrchestrator(f.deps);

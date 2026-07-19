@@ -4,7 +4,8 @@
  * sinks. The only file that knows the concrete services; orchestrator.ts stays pure.
  */
 import { getRedis } from "@urimai/cache";
-import { listLatestLetterTypes, saveLetterApproval, saveLetterDraft } from "@urimai/db";
+import { listLatestLetterTypes, listLatestOffices, saveLetterApproval, saveLetterDraft } from "@urimai/db";
+import { pickCcOffices, pickToOffice } from "@urimai/letter-types";
 import { classifyLetter, extractLetterFacts } from "@urimai/letters-extractor";
 import { draftLetter } from "@urimai/letters-drafter";
 import { createLettersOrchestrator, type SessionStore } from "./orchestrator.js";
@@ -28,8 +29,23 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
     loadTypes: () => listLatestLetterTypes(),
     classify: (text, types) => classifyLetter(text, types),
     extract: (text, pendingFact) => extractLetterFacts(text, { pendingFact }),
-    draft: (type, facts, req) =>
-      draftLetter(type, facts, { language: req.language, correction: req.correction }).then((r) => r.draft),
+    // The addressee directory is resolved HERE, around the drafter call — the
+    // orchestrator core stays pure of it. User-stated addressee wins; the directory
+    // fills in only when the user named nobody. Curated CC per the ccFor mapping,
+    // unless the user asked to drop it.
+    draft: async (type, facts, req) => {
+      const offices = await listLatestOffices();
+      const userNamedAddressee = Boolean(facts.addressee_name || facts.addressee_office || facts.addressee_address);
+      const toOffice = userNamedAddressee ? null : pickToOffice(offices, type.id);
+      const ccOffices = req.includeCuratedCc ? pickCcOffices(offices, type.id, toOffice?.id) : [];
+      const r = await draftLetter(type, facts, {
+        language: req.language,
+        correction: req.correction,
+        toOffice,
+        ccOffices,
+      });
+      return r.draft;
+    },
     logDraft: (input) => saveLetterDraft(input),
     logApproval: (input) => {
       // logDraft above always runs first, so a missing draftId is a bug — fail loudly

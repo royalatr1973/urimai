@@ -19,7 +19,8 @@ export function memoryStore(): SessionStore & { map: Map<string, string> } {
 export const emptyFacts = (): LetterFacts => ({ letterTypeId: null, language: null });
 
 /** A deterministic fake drafter: body = the collected facts, verbatim. */
-export function fakeDraft(type: LetterType, facts: LetterFacts, correctionNote?: string): LetterDraft {
+export function fakeDraft(type: LetterType, facts: LetterFacts, correctionNote?: string, includeCuratedCc = true): LetterDraft {
+  const cc = [...(facts.copy_to ? [facts.copy_to] : []), ...(includeCuratedCc ? ["நகல்-அலுவலகம் (directory)"] : [])];
   return {
     letterTypeId: type.id,
     typeVersion: type.version,
@@ -31,7 +32,7 @@ export function fakeDraft(type: LetterType, facts: LetterFacts, correctionNote?:
     bodyParagraphs: [facts.incident_details ?? "________", ...(correctionNote ? [correctionNote] : [])],
     closing: "நன்றி.",
     signatureLine: `இப்படிக்கு,\n${facts.sender_name ?? "________"}`,
-    copyTo: facts.copy_to ?? null,
+    copyTo: cc.length > 0 ? cc.join("\n") : null,
     disclaimer: "AI உதவியுடன் உருவாக்கப்பட்டது.",
     language: "ta",
   };
@@ -69,7 +70,13 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
     },
     draft: async (type, facts, req) => {
       calls.draft += 1;
-      return fakeDraft(type, facts, req.correction ? `[திருத்தம்: ${req.correction.instruction}]` : undefined);
+      // A CC-only instruction leaves the body untouched (like the real drafter, which
+      // is told to apply ONLY the requested change).
+      const note =
+        req.correction && !/நகல்/.test(req.correction.instruction)
+          ? `[திருத்தம்: ${req.correction.instruction}]`
+          : undefined;
+      return fakeDraft(type, facts, note, req.includeCuratedCc);
     },
     logDraft: async (input) => {
       drafts.push({ revision: input.revision, draftHash: input.draftHash });

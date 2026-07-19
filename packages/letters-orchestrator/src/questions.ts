@@ -100,6 +100,12 @@ export const NO_CHANGE_NEEDED: LetterQuestion = {
   en: "The letter already reads that way — no change was needed.",
 };
 
+/** A correction that only removed content (e.g. dropping the நகல் recipients). */
+export const REMOVED_NOTE: LetterQuestion = {
+  ta: "கேட்டபடி நீக்கிவிட்டேன்.",
+  en: "Removed as you asked.",
+};
+
 /** When the review reply is neither a clear yes nor a stated change (§2.1 — never guess). */
 export const CLARIFY_PROMPT: LetterQuestion = {
   ta: "மன்னிக்கவும், சரியாகப் புரியவில்லை. கடிதம் சரியென்றால் 'சரி' என்று மட்டும் சொல்லுங்கள்; மாற்ற வேண்டியிருந்தால், எதை எப்படி மாற்ற வேண்டும் என்று சொல்லுங்கள்.",

@@ -4,7 +4,7 @@
  * LetterType record + collected facts, in code. The LLM never touches these. Legal
  * citations enter the letter HERE, from the LetterType's legalRefs, and nowhere else.
  */
-import type { LetterFacts, LetterType } from "@urimai/types";
+import type { LetterFacts, LetterType, Office } from "@urimai/types";
 
 export type Language = "ta" | "en" | "bilingual";
 
@@ -60,12 +60,35 @@ export function buildSenderBlock(facts: LetterFacts): string {
   return lines.join("\n");
 }
 
-/** Addressee from facts; when the user knew nothing, the type's addresseeHint (§7.4). */
-export function buildAddresseeBlock(type: LetterType, facts: LetterFacts): string {
+/** An office's full postal block: Tamil designation, address lines, pincode. */
+export function officeAddressBlock(office: Office): string {
+  const lines = [office.designationTamil, ...office.addressLines];
+  if (office.pincode) {
+    const last = lines.length - 1;
+    lines[last] = `${lines[last]} - ${office.pincode}`;
+  }
+  return lines.join("\n");
+}
+
+/** A single நகல் line for an office: designation, plus the address when usable. */
+export function officeCcLine(office: Office): string {
+  const usable = office.addressLines.length > 0 && !office.addressLines.some((l) => l.toUpperCase().includes("ADDRESS_TO_VERIFY"));
+  if (!usable) return office.designationTamil;
+  const addr = office.addressLines.join(", ");
+  return `${office.designationTamil}, ${addr}${office.pincode ? ` - ${office.pincode}` : ""}`;
+}
+
+/**
+ * Addressee precedence (§7.4 + live-tester feedback): what the USER stated wins; else
+ * the curator DIRECTORY office for this letter type; else the type's addresseeHint.
+ */
+export function buildAddresseeBlock(type: LetterType, facts: LetterFacts, toOffice?: Office | null): string {
   const lines = [facts.addressee_name, facts.addressee_office, facts.addressee_address].filter(
     (v): v is string => typeof v === "string" && v.length > 0,
   );
-  return lines.length > 0 ? lines.join("\n") : stripCuratorMarkers(type.addresseeHint) || BLANK;
+  if (lines.length > 0) return lines.join("\n");
+  if (toOffice) return officeAddressBlock(toOffice);
+  return stripCuratorMarkers(type.addresseeHint) || BLANK;
 }
 
 /**
@@ -92,9 +115,16 @@ export function buildSignatureLine(facts: LetterFacts, language: Language): stri
   return [s.signaturePrefix, facts.sender_name ?? BLANK, s.signatureNote].join("\n");
 }
 
-/** "நகல்:" recipients — ONLY what the user named; null when they named nobody. */
-export function buildCopyTo(facts: LetterFacts): string | null {
-  return facts.copy_to ?? null;
+/**
+ * "நகல்:" recipients: whoever the USER named first, then curated directory CC
+ * offices — curator data, not model invention. null when there is nobody.
+ */
+export function buildCopyTo(facts: LetterFacts, ccOffices: Office[] = []): string | null {
+  const lines = [
+    ...(facts.copy_to ? [facts.copy_to] : []),
+    ...ccOffices.map((o) => officeCcLine(o)),
+  ];
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 export function buildDisclaimer(language: Language): string {

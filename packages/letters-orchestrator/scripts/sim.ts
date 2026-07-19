@@ -50,6 +50,9 @@ async function main() {
       case "escalate":
         console.log(`🤖  [escalate after ${r.revisions} revisions]`);
         break;
+      case "clarify":
+        console.log(`🤖  [clarify] ${r.prompt.ta}`);
+        break;
       case "listen":
         console.log(`🤖  ${r.prompt.ta}`);
         break;

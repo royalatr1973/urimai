@@ -49,7 +49,7 @@ export function buildLetterDocument(draft: LetterDraft): Document {
           ...draft.bodyParagraphs.map((p) => para(p, { after: 240, align: AlignmentType.JUSTIFIED })),
           para(draft.closing, { after: 600 }),
           ...block(draft.signatureLine, { align: AlignmentType.RIGHT, after: draft.copyTo || draft.disclaimer ? 480 : 0 }),
-          ...(draft.copyTo ? [para(`${L.copyTo} ${draft.copyTo}`, { after: 240 })] : []),
+          ...(draft.copyTo ? block(`${L.copyTo} ${draft.copyTo}`, { after: 240 }) : []),
           ...(draft.disclaimer ? [para(draft.disclaimer, { after: 0 })] : []),
         ],
       },

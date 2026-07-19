@@ -24,6 +24,7 @@ import {
   NO_CHANGE_NEEDED,
   QUESTIONS,
   READBACK_PROMPT,
+  REMOVED_NOTE,
   type LetterQuestion,
 } from "./questions.js";
 
@@ -38,6 +39,8 @@ export interface DraftRequest {
   /** Read-back correction context; absent on the first draft. */
   correction?: { instruction: string; previousBody: string[] };
   language: LetterType["languageDefault"];
+  /** false after the user asked to drop the curated நகல் recipients. */
+  includeCuratedCc: boolean;
 }
 
 export interface LettersOrchestratorDeps {
@@ -100,6 +103,8 @@ interface SessionState {
   revisions: number;
   draft: LetterDraft | null;
   draftId: string | null;
+  /** User said drop the curated நகல் recipients — stays off for this letter. */
+  ccDisabled: boolean;
 }
 
 const EMPTY_STATE: SessionState = {
@@ -112,6 +117,7 @@ const EMPTY_STATE: SessionState = {
   revisions: 0,
   draft: null,
   draftId: null,
+  ccDisabled: false,
 };
 
 function decodeState(raw: string | null): SessionState {
@@ -154,7 +160,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     prevDraft?: LetterDraft,
   ): Promise<LetterTurnResult> {
     const language = resolveLanguage(type, state.facts);
-    const draft = await deps.draft(type, state.facts, { correction, language });
+    const draft = await deps.draft(type, state.facts, { correction, language, includeCuratedCc: !state.ccDisabled });
     const hash = draftHash(draft);
     const draftId = deps.logDraft
       ? await deps.logDraft({ sessionId, draft, revision: state.revisions, draftHash: hash })
@@ -164,7 +170,12 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
 
     if (prevDraft) {
       const changed = chunkChangedReadback(prevDraft, draft);
-      const chunks = changed.length > 0 ? [CHANGED_INTRO.ta, ...changed] : [NO_CHANGE_NEEDED.ta];
+      const chunks =
+        changed.length > 0
+          ? [CHANGED_INTRO.ta, ...changed]
+          : draftHash(prevDraft) !== hash
+            ? [REMOVED_NOTE.ta] // text changed but nothing new to read — content was removed
+            : [NO_CHANGE_NEEDED.ta];
       return { kind: "readback", draft, chunks, revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: true };
     }
     return { kind: "readback", draft, chunks: chunkReadback(draft), revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: false };
@@ -187,7 +198,10 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
 
     // --- read-back phase: approve / correct / clarify (§7.6) ------------------
     if (state.phase === "reviewing" && state.draft) {
-      const reply = classifyReviewReply(text);
+      // "நகல் வேண்டாம்" — dropping the curated CC is a stated change; detect it BEFORE
+      // the classifier, whose bare-negative rule would otherwise send it to clarify.
+      const dropCc = /நகல்|நகலை|copy|cc/i.test(text) && /வேண்டாம்|நீக்க|நீக்கு|இல்லாம|remove|drop/i.test(text);
+      const reply = dropCc ? "correction" : classifyReviewReply(text);
 
       if (reply === "approve") {
         const hash = draftHash(state.draft);
@@ -224,6 +238,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         ...state,
         facts: mergeFacts(state.facts, extracted),
         revisions: state.revisions + 1,
+        ccDisabled: state.ccDisabled || dropCc,
       };
       const type = resolveLetterType(types, withNew.typeId);
       if (!type) throw new Error("letter-type catalogue is empty — cannot draft");
