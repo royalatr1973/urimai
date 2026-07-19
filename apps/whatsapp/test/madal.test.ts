@@ -14,6 +14,8 @@ const draft: LetterDraft = {
   bodyParagraphs: ["சாக்கடை ஓவர்ஃப்ளோ."],
   closing: "நன்றி.",
   signatureLine: "இப்படிக்கு,\nலட்சுமி",
+  copyTo: null,
+  disclaimer: "AI உதவியுடன் உருவாக்கப்பட்டது.",
   language: "ta",
 };
 

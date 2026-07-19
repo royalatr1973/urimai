@@ -13,14 +13,17 @@ const draft = (bodyParagraphs: string[]): LetterDraft => ({
   bodyParagraphs,
   closing: "நன்றி.",
   signatureLine: "இப்படிக்கு,\nலட்சுமி",
+  copyTo: null,
+  disclaimer: "இந்தக் கடிதம் AI உதவியுடன் உருவாக்கப்பட்டது. சரிபார்த்து பயன்படுத்தவும்.",
   language: "ta",
 });
 
 describe("chunkReadback — TTS-safe blocks (§7.6)", () => {
-  it("keeps a short letter to one chunk, under the limit", () => {
+  it("keeps a short letter compact, every chunk under the limit, disclaimer spoken last", () => {
     const chunks = chunkReadback(draft(["சாக்கடை மூணு வாரமா ஓவர்ஃப்ளோ ஆகுது."]));
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]!.length).toBeLessThanOrEqual(TTS_CHUNK_LIMIT);
+    expect(chunks.length).toBeLessThanOrEqual(2);
+    for (const c of chunks) expect(c.length).toBeLessThanOrEqual(TTS_CHUNK_LIMIT);
+    expect(chunks.at(-1)).toContain("AI");
   });
 
   it("splits a long letter on block boundaries, every chunk under the limit, nothing lost", () => {

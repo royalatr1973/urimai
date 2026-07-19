@@ -63,6 +63,7 @@ amount              a money amount involved, as stated (keep units: "₹8,000", 
 reference_ids       application numbers, FIR numbers, consumer numbers etc. they quoted
 relief_sought       what they want done, in their words
 attachments         documents they said they have / will attach
+copy_to             who else should receive a copy (நகல்), ONLY if they named someone
 
 # RULES
 - Keep values in the person's own language; short verbatim-flavoured phrases, not your rewording (incident_details may be condensed but must contain only their content).
@@ -91,6 +92,7 @@ const FACT_CONTEXT: Record<FactKey, string> = {
   reference_ids: "any application/FIR/consumer number — a bare code or number is the answer",
   relief_sought: "what they want done",
   attachments: "documents they have or will attach — a bare \"no\"/\"இல்லை\" means none, omit the key",
+  copy_to: "who else should get a copy (நகல்) of the letter — a bare office/person name is the answer; a bare \"no\"/\"இல்லை\"/\"வேண்டாம்\" means nobody, omit the key",
 };
 
 /** Wrap the narration for extraction; `pendingFact` = the fact the gap loop just asked about. */

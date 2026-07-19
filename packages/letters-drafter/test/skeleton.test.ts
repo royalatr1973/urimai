@@ -15,9 +15,20 @@ describe("deterministic skeleton", () => {
     expect(draft.senderBlock).toBe("முருகன்\nகடலூர் பழைய பஸ் ஸ்டாண்ட் பக்கம்");
     expect(draft.date).toBe("19-07-2026");
     expect(draft.subject).toBe(POLICE_TYPE.nameTamil); // no user subject → type name; no refs → no citation
-    expect(draft.salutation).toBe("ஐயா / அம்மையீர்,");
+    expect(draft.salutation).toContain("மதிப்பிற்குரிய"); // polite register (live-tester feedback)
     expect(draft.signatureLine).toContain("முருகன்");
     expect(draft.signatureLine).toContain("பெருவிரல்"); // thumb-impression wording
+    expect(draft.disclaimer).toContain("AI"); // every letter carries the AI notice
+    expect(draft.copyTo).toBeNull(); // CC only when the user names someone
+  });
+
+  it("renders a copy-to line ONLY from the user's own words", async () => {
+    const { draft } = await draftLetter(
+      POLICE_TYPE,
+      { ...FACTS, copy_to: "மாவட்ட காவல் கண்காணிப்பாளர் அலுவலகம்" },
+      { client: okBody, date: "19-07-2026" },
+    );
+    expect(draft.copyTo).toBe("மாவட்ட காவல் கண்காணிப்பாளர் அலுவலகம்");
   });
 
   it("falls back to the addresseeHint (curator markers stripped) when the user knew no addressee", () => {

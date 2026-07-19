@@ -66,7 +66,12 @@ describe("missingRequiredFacts — the gap loop's question source", () => {
       sender_name: "க. மாதிரி",
       incident_place: "மாதிரி தெரு",
     };
-    expect(missingRequiredFacts(police, facts)).toEqual(["sender_address", "incident_date", "incident_details"]);
+    expect(missingRequiredFacts(police, facts)).toEqual([
+      "sender_address",
+      "incident_date",
+      "incident_details",
+      "addressee_office", // v2: every specific type asks who the letter goes to
+    ]);
   });
 
   it("treats whitespace-only answers as still missing", () => {
@@ -83,7 +88,8 @@ describe("missingRequiredFacts — the gap loop's question source", () => {
       incident_place: "மாதிரி சந்தை",
       incident_details: "என் கைப்பை திருடப்பட்டது",
     };
-    expect(hasAllRequiredFacts(police, facts)).toBe(true);
+    expect(hasAllRequiredFacts(police, facts)).toBe(false); // addressee_office still missing (v2)
+    expect(hasAllRequiredFacts(police, { ...facts, addressee_office: "மாதிரி காவல் நிலையம்" })).toBe(true);
   });
 });
 

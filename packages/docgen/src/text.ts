@@ -13,16 +13,18 @@ export interface LetterLabels {
   to: string;
   date: string;
   subject: string;
+  copyTo: string;
 }
 
 const LABELS: Record<LetterDraft["language"], LetterLabels> = {
-  ta: { from: "அனுப்புநர்:", to: "பெறுநர்:", date: "நாள்:", subject: "பொருள்:" },
-  en: { from: "From:", to: "To:", date: "Date:", subject: "Subject:" },
+  ta: { from: "அனுப்புநர்:", to: "பெறுநர்:", date: "நாள்:", subject: "பொருள்:", copyTo: "நகல்:" },
+  en: { from: "From:", to: "To:", date: "Date:", subject: "Subject:", copyTo: "Copy to:" },
   bilingual: {
     from: "அனுப்புநர் / From:",
     to: "பெறுநர் / To:",
     date: "நாள் / Date:",
     subject: "பொருள் / Subject:",
+    copyTo: "நகல் / Copy to:",
   },
 };
 
@@ -51,6 +53,8 @@ export function assembleLetterText(draft: LetterDraft): string {
     draft.closing,
     "",
     draft.signatureLine,
+    ...(draft.copyTo ? ["", `${L.copyTo} ${draft.copyTo}`] : []),
+    ...(draft.disclaimer ? ["", draft.disclaimer] : []),
   ].join("\n");
 }
 

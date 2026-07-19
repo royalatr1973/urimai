@@ -8,7 +8,12 @@
 import type { LetterDraft } from "@urimai/types";
 import { assembleLetterText, letterLabels } from "@urimai/docgen";
 
-export const TTS_CHUNK_LIMIT = 1400;
+/**
+ * Short on purpose: live testing (July 2026) showed long single voice notes arriving
+ * with the tail of the letter missing — small chunks mean MORE voice notes but each
+ * one complete. (Sarvam's hard cap is 1500; we stay far below it.)
+ */
+export const TTS_CHUNK_LIMIT = 500;
 
 /** The draft's natural read-back blocks, in canonical order. */
 function draftBlocks(draft: LetterDraft): string[] {
@@ -22,6 +27,8 @@ function draftBlocks(draft: LetterDraft): string[] {
     ...draft.bodyParagraphs,
     draft.closing,
     draft.signatureLine,
+    ...(draft.copyTo ? [`${L.copyTo} ${draft.copyTo}`] : []),
+    ...(draft.disclaimer ? [draft.disclaimer] : []),
   ];
 }
 

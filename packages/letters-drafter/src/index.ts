@@ -13,6 +13,8 @@ export { DRAFT_SYSTEM_PROMPT, buildDraftUserPrompt, type CorrectionContext } fro
 export {
   BLANK,
   buildAddresseeBlock,
+  buildCopyTo,
+  buildDisclaimer,
   buildSenderBlock,
   buildSignatureLine,
   buildSubject,

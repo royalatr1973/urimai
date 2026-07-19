@@ -31,6 +31,8 @@ export function fakeDraft(type: LetterType, facts: LetterFacts, correctionNote?:
     bodyParagraphs: [facts.incident_details ?? "________", ...(correctionNote ? [correctionNote] : [])],
     closing: "நன்றி.",
     signatureLine: `இப்படிக்கு,\n${facts.sender_name ?? "________"}`,
+    copyTo: facts.copy_to ?? null,
+    disclaimer: "AI உதவியுடன் உருவாக்கப்பட்டது.",
     language: "ta",
   };
 }

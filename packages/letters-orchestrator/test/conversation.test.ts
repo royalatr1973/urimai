@@ -41,14 +41,20 @@ describe("full letters conversation", () => {
     expect(t3.fact).toBe("incident_date");
     expect(f.calls.extract.at(-1)?.pendingFact).toBe("sender_address");
 
-    // Turn 4 — last required fact: the draft appears, read back with a prompt.
+    // Turn 4 — date arrives; v2 types always ask WHO the letter goes to next.
     f.queueExtract({ incident_date: "நேத்து ராத்திரி" });
     const t4 = await orch.handleTurn(sid, "நேத்து ராத்திரி");
-    expect(t4.kind).toBe("readback");
-    if (t4.kind !== "readback") throw new Error("unreachable");
-    expect(t4.revisions).toBe(0);
-    expect(t4.chunks.length).toBeGreaterThan(0);
-    expect(t4.draft.bodyParagraphs.join()).toContain("திருட்டு");
+    expect(t4.kind).toBe("question");
+    if (t4.kind !== "question") throw new Error("unreachable");
+    expect(t4.fact).toBe("addressee_office");
+
+    // Turn 4b — "தெரியலை" skips it (the letter uses the type's hint): draft appears.
+    const t4b = await orch.handleTurn(sid, "தெரியலை");
+    expect(t4b.kind).toBe("readback");
+    if (t4b.kind !== "readback") throw new Error("unreachable");
+    expect(t4b.revisions).toBe(0);
+    expect(t4b.chunks.length).toBeGreaterThan(0);
+    expect(t4b.draft.bodyParagraphs.join()).toContain("திருட்டு");
     expect(f.drafts).toHaveLength(1);
 
     // Turn 5 — a correction: re-draft with the instruction, revision counted, logged.

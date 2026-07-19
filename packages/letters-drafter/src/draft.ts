@@ -12,6 +12,8 @@ import { buildDraftUserPrompt, DRAFT_SYSTEM_PROMPT, type CorrectionContext } fro
 import {
   buildAddresseeBlock,
   buildClosing,
+  buildCopyTo,
+  buildDisclaimer,
   buildSalutation,
   buildSenderBlock,
   buildSignatureLine,
@@ -128,6 +130,8 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
       bodyParagraphs,
       closing: buildClosing(language),
       signatureLine: buildSignatureLine(facts, language),
+      copyTo: buildCopyTo(facts),
+      disclaimer: buildDisclaimer(language),
       language,
     },
     bodySource,

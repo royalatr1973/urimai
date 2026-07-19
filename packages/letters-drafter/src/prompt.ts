@@ -12,7 +12,7 @@ export const DRAFT_SYSTEM_PROMPT = `You write the BODY PARAGRAPHS of a formal le
 # ABSOLUTE RULES
 - Use ONLY the facts given. NEVER add names, dates, places, amounts, numbers, offices, or events that are not in the facts. If an essential detail is missing, write the blank "________" instead.
 - NO legal citations of any kind (no Acts, section numbers, IPC/BNSS references) — the system adds any citation itself from verified data.
-- Write in the requested language, in a plain, respectful, formal register a village officer expects. Simple words; no flourishes.
+- Write in the requested language, in a plain, VERY polite and respectful formal register (மிக்க பணிவுடன்) — humble requests, never demands or accusations; the reader is an officer being asked for kind action. Simple words; no flourishes.
 - 2 to 4 SHORT paragraphs: what happened / the situation, then (if given) earlier attempts, then the request. Do not repeat the sender's address or the subject line.
 - If a correction instruction and a previous body are provided, apply ONLY that change to the previous body, keeping everything else as it was.
 

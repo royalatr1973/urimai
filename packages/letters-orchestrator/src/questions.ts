@@ -71,6 +71,10 @@ export const QUESTIONS: Record<FactKey, LetterQuestion> = {
     ta: "கடிதத்துடன் இணைக்க ஏதாவது ஆவணங்கள் இருக்கிறதா?",
     en: "Do you have any documents to attach?",
   },
+  copy_to: {
+    ta: "இந்தக் கடிதத்தின் நகல் வேறு யாருக்காவது போக வேண்டுமா? வேண்டாம் என்றால் 'வேண்டாம்' என்று சொல்லுங்கள்.",
+    en: "Should a copy of this letter go to anyone else? Say 'no' if not.",
+  },
 };
 
 /** The listen prompt — §7.2, spoken after the user picks "letter" at the greeting. */

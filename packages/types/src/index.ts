@@ -149,7 +149,8 @@ export type FactKey =
   | "amount"
   | "reference_ids"
   | "relief_sought"
-  | "attachments";
+  | "attachments"
+  | "copy_to";
 
 /** Every collectable fact key, in canonical order — for validation and prompt building. */
 export const FACT_KEYS: FactKey[] = [
@@ -168,6 +169,7 @@ export const FACT_KEYS: FactKey[] = [
   "reference_ids",
   "relief_sought",
   "attachments",
+  "copy_to",
 ];
 
 /** A letter type — the asset. DB-backed, versioned, human-verified, like Scheme. */
@@ -203,6 +205,10 @@ export type LetterDraft = {
   bodyParagraphs: string[]; // the ONLY LLM-authored part
   closing: string;
   signatureLine: string; // supports thumb-impression wording
+  /** "நகல்:" (copy-to) recipients — ONLY from the user's words; null when none named. */
+  copyTo: string | null;
+  /** Fixed AI-assistance disclaimer, rendered on every letter (live-tester request, July 2026). */
+  disclaimer: string;
   language: "ta" | "en" | "bilingual";
 };
 

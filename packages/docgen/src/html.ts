@@ -40,6 +40,8 @@ export function renderLetterHtml(draft: LetterDraft, opts: RenderHtmlOptions = {
   p.body { text-align: justify; margin-bottom: 1em; }
   .closing { margin-bottom: 2.5em; }
   .signature { white-space: pre-line; text-align: right; }
+  .copyto { white-space: pre-line; margin-top: 2em; }
+  .disclaimer { margin-top: 2.5em; padding-top: 0.6em; border-top: 1px solid #999; font-size: 9pt; color: #444; }
 </style>
 </head>
 <body>
@@ -53,6 +55,6 @@ ${esc(draft.addresseeBlock)}</div>
     ${body}
   <div class="closing">${esc(draft.closing)}</div>
   <div class="signature">${esc(draft.signatureLine)}</div>
-</body>
+${draft.copyTo ? `  <div class="copyto"><span class="label">${esc(L.copyTo)}</span> ${esc(draft.copyTo)}</div>\n` : ""}${draft.disclaimer ? `  <div class="disclaimer">${esc(draft.disclaimer)}</div>\n` : ""}</body>
 </html>`;
 }
