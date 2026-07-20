@@ -38,6 +38,31 @@ describe("checkBodyAgainstFacts", () => {
   it("allows single digits (counts like '2 chains') without a fact match", () => {
     expect(checkBodyAgainstFacts(["2 தங்க செயின் திருடு போச்சு."], FACTS).ok).toBe(true);
   });
+
+  it("allows numbers the user SPOKE even when they never became a structured fact", () => {
+    const transcript = "நேத்து ராத்திரி திருட்டு. என் வீட்டு கதவு எண் 47, போன் 9876543210.";
+    expect(checkBodyAgainstFacts(["கதவு எண் 47 வீட்டில் நடந்தது."], FACTS).ok).toBe(false); // not in facts
+    expect(checkBodyAgainstFacts(["கதவு எண் 47 வீட்டில் நடந்தது."], FACTS, transcript).ok).toBe(true); // user said it
+  });
+});
+
+describe("transcript context — user inputs beyond the asked questions are kept", () => {
+  it("passes the full transcript to the drafting prompt and its numbers to the guard", async () => {
+    const transcript = "செயின் ரெண்டும் போச்சு. அது என் அம்மா குடுத்தது, 15 வருஷமா வச்சிருந்தேன்.";
+    let seenPrompt = "";
+    const client: DrafterClient = {
+      messages: {
+        create: async (args: { messages: Array<{ content: string }> }) => {
+          seenPrompt = args.messages[0]!.content;
+          return { content: [{ type: "text", text: '{"bodyParagraphs":["15 வருஷமா வைத்திருந்த செயின் திருடு போனது."]}' }] };
+        },
+      },
+    } as unknown as DrafterClient;
+    const { draft, bodySource } = await draftLetter(POLICE_TYPE, FACTS, { client, date: "20-07-2026", transcript });
+    expect(seenPrompt).toContain("15 வருஷமா"); // transcript reached the prompt
+    expect(bodySource).toBe("llm"); // "15" allowed — the user said it
+    expect(draft.bodyParagraphs[0]).toContain("15 வருஷமா");
+  });
 });
 
 describe("draftLetter end-to-end bait", () => {

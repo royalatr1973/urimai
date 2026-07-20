@@ -47,9 +47,13 @@ const EMPTY: AddresseeSearchResult = { to: null, cc: [] };
 
 const SYSTEM_PROMPT = `You find the correct government office (designation + full postal address) that a citizen's formal letter in Tamil Nadu, India should be addressed to, and up to 2 offices that should receive a copy (நகல்).
 
-Use web search (restricted to official government sites). RULES:
+FIRST think about jurisdiction, based on the citizen's actual situation:
+- WHO has the power to act on this specific matter? (a theft → the police station/SP with territorial jurisdiction; unpaid wages → the district Labour Officer; drainage → the commissioner/EO of THAT town's local body; a stopped pension → the taluk office where they applied)
+- The To office should be the most LOCAL office that can actually act. The CC offices should be the SUPERVISORY level above it (so inaction is visible upward) and/or a grievance cell — not random offices.
+
+Then use web search (restricted to official government sites) to find those specific offices' real addresses. RULES:
 - Report ONLY a designation and address you actually read on an official page. NEVER compose an address from memory or guess a pincode.
-- Prefer the most LOCAL competent office for the citizen's district/place; a state headquarters is acceptable when no local office is found.
+- If the exact local office's address is not verifiable, fall back to its district or state office — with its real address.
 - If you cannot confidently find an official address, return null for "to" — that is a good answer; a wrong address is the worst answer.
 
 # OUTPUT
@@ -61,15 +65,18 @@ After searching, return ONLY one JSON object, no prose around it:
 
 export function buildAddresseeSearchPrompt(type: LetterType, facts: LetterFacts): string {
   const clues = [
+    facts.incident_details ? `What happened (their words): ${facts.incident_details}` : null,
+    facts.relief_sought ? `What they want done: ${facts.relief_sought}` : null,
     facts.incident_place ? `Place of the matter: ${facts.incident_place}` : null,
     facts.sender_address ? `Sender lives at: ${facts.sender_address}` : null,
+    facts.prior_attempts ? `Already tried: ${facts.prior_attempts}` : null,
     facts.addressee_name ? `User mentioned addressee name: ${facts.addressee_name}` : null,
   ].filter(Boolean);
   return `Letter type: ${type.nameEnglish} / ${type.nameTamil}
 Usual recipient (curator hint): ${type.addresseeHint}
-${clues.length > 0 ? clues.join("\n") : "No district/place information given — use the appropriate Tamil Nadu state-level office."}
+${clues.length > 0 ? clues.join("\n") : "No situation/place information given — use the appropriate Tamil Nadu state-level office."}
 
-Find the correct To office (and up to 2 CC offices) with full postal addresses from official sources, then return the JSON object.`;
+Reason about which office has jurisdiction over THIS situation, then find that To office (and up to 2 supervisory/grievance CC offices) with full postal addresses from official sources, and return the JSON object.`;
 }
 
 function isOfficialUrl(source: unknown): boolean {

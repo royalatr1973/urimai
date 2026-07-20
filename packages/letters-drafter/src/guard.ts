@@ -29,24 +29,27 @@ const CITATION_PATTERNS: RegExp[] = [
   /\b(ipc|crpc|bnss|bns)\b/i,
 ];
 
-/** All digit-runs (2+ digits) present anywhere in the collected facts. */
-function factDigitRuns(facts: LetterFacts): Set<string> {
+/** All digit-runs (2+ digits) present in the collected facts or the user's transcript. */
+function allowedDigitRuns(facts: LetterFacts, userWords?: string): Set<string> {
   const runs = new Set<string>();
   for (const key of FACT_KEYS) {
     const v = facts[key];
     if (typeof v !== "string") continue;
     for (const m of v.matchAll(/\d{2,}/g)) runs.add(m[0]);
   }
+  if (userWords) {
+    for (const m of userWords.matchAll(/\d{2,}/g)) runs.add(m[0]);
+  }
   return runs;
 }
 
 /**
- * Check LLM-authored paragraphs against the collected facts. Pure and deterministic —
- * unit-testable without any model.
+ * Check LLM-authored paragraphs against everything the user actually said (structured
+ * facts + verbatim transcript). Pure and deterministic — unit-testable without a model.
  */
-export function checkBodyAgainstFacts(paragraphs: string[], facts: LetterFacts): GuardVerdict {
+export function checkBodyAgainstFacts(paragraphs: string[], facts: LetterFacts, userWords?: string): GuardVerdict {
   const violations: string[] = [];
-  const allowed = factDigitRuns(facts);
+  const allowed = allowedDigitRuns(facts, userWords);
   const body = paragraphs.join("\n");
 
   for (const m of body.matchAll(/\d{2,}/g)) {

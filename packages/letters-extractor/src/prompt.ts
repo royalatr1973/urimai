@@ -67,6 +67,7 @@ copy_to             who else should receive a copy (நகல்), ONLY if they 
 
 # RULES
 - Keep values in the person's own language; short verbatim-flavoured phrases, not your rewording (incident_details may be condensed but must contain only their content).
+- NOTHING the person says may be lost: if a reply carries extra narrative detail beyond the fact that was asked (background, who was involved, consequences, feelings that matter to the case), capture that detail under incident_details too — details are ACCUMULATED across turns, never dropped.
 - The writer vs the addressee: "நான்"/"I" facts are sender_*; who it should go to is addressee_*.
 - "I don't know" about a fact → omit that key.
 - Do NOT classify the letter type and do NOT add keys outside the set.`;

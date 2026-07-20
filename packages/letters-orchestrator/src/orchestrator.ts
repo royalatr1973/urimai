@@ -46,6 +46,12 @@ export interface DraftRequest {
   toOffice?: OfficeAddress | null;
   /** Resolved CC offices — already gated by includeCuratedCc. */
   ccOffices?: OfficeAddress[];
+  /**
+   * EVERYTHING the user said this session, verbatim — the drafter may draw any detail
+   * from it (their words, so the facts-only principle §2.2 holds), ensuring inputs
+   * beyond the asked question are never lost.
+   */
+  transcript?: string;
 }
 
 /** Resolved To/CC offices for one letter — computed once, reused across revisions. */
@@ -149,11 +155,24 @@ function decodeState(raw: string | null): SessionState {
   }
 }
 
+/**
+ * Narrative facts ACCUMULATE across turns (live-tester feedback, July 2026: extra
+ * detail the user volunteers while answering some other question must never be lost) —
+ * a new value is appended to what we already know instead of replacing it.
+ */
+const NARRATIVE_KEYS = new Set<string>(["incident_details", "prior_attempts"]);
+
 /** Merge newly-extracted facts over stored ones; empty extraction never erases. */
 export function mergeFacts(base: LetterFacts, update: LetterFacts): LetterFacts {
   const out: LetterFacts = { ...base };
   for (const [key, value] of Object.entries(update)) {
-    if (value !== null && value !== undefined && value !== "") {
+    if (value === null || value === undefined || value === "") continue;
+    const prev = (base as Record<string, unknown>)[key];
+    if (NARRATIVE_KEYS.has(key) && typeof prev === "string" && typeof value === "string" && prev.length > 0) {
+      // Already-known detail: keep the accumulated text (never shrink it).
+      // New detail: append. Either way, nothing previously captured is lost.
+      if (!prev.includes(value)) (out as Record<string, unknown>)[key] = `${prev} ${value}`;
+    } else {
       (out as Record<string, unknown>)[key] = value;
     }
   }
@@ -196,6 +215,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       includeCuratedCc: !state.ccDisabled,
       toOffice: state.resolved?.to ?? null,
       ccOffices: state.ccDisabled ? [] : state.resolved?.cc ?? [],
+      transcript: state.transcript,
     });
     const hash = draftHash(draft);
     const draftId = deps.logDraft

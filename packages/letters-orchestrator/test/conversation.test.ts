@@ -6,11 +6,30 @@
 import { describe, it, expect } from "vitest";
 import type { LetterDraft } from "@urimai/types";
 import { assembleLetterText } from "@urimai/docgen";
-import { createLettersOrchestrator } from "../src/orchestrator.js";
+import { createLettersOrchestrator, mergeFacts } from "../src/orchestrator.js";
 import { makeFakeDeps } from "./helpers.js";
 
 /** The printed letter text must never carry the AI disclaimer (voice-only). */
 const assembleTextHasNoDisclaimer = (draft: LetterDraft) => !assembleLetterText(draft).includes("AI");
+
+describe("mergeFacts — nothing the user says is lost", () => {
+  it("narrative facts ACCUMULATE across turns instead of overwriting", () => {
+    const first = "தங்க செயின் திருடு போச்சு";
+    const extra = "அது என் அம்மாவோட செயின்";
+    const base = { letterTypeId: null, language: null, incident_details: first };
+    const merged = mergeFacts(base, { letterTypeId: null, language: null, incident_details: extra });
+    expect(merged.incident_details).toBe(`${first} ${extra}`);
+    // Re-extraction of the SAME detail does not duplicate it.
+    expect(mergeFacts(merged, { letterTypeId: null, language: null, incident_details: extra }).incident_details).toBe(
+      merged.incident_details,
+    );
+  });
+
+  it("non-narrative facts still take the newest value", () => {
+    const base = { letterTypeId: null, language: null, incident_date: "நேத்து" };
+    expect(mergeFacts(base, { letterTypeId: null, language: null, incident_date: "18-07-2026" }).incident_date).toBe("18-07-2026");
+  });
+});
 
 describe("full letters conversation", () => {
   it("drives narration → confirm → gap loop → readback → correction → approval", async () => {

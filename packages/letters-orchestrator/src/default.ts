@@ -35,6 +35,7 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
         correction: req.correction,
         toOffice: req.toOffice,
         ccOffices: req.ccOffices ?? [],
+        transcript: req.transcript,
       });
       return r.draft;
     },
