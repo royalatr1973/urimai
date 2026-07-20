@@ -32,9 +32,9 @@ describe("seed catalogue sanity", () => {
     }
   });
 
-  it("the generic fallback demands only the bare minimum (name + story)", () => {
+  it("the generic fallback asks name, story, addressee, and copy (v3: always ask To + copy)", () => {
     const generic = SEED_LETTER_TYPES.find((t) => t.id === GENERIC_PETITION_ID)!;
-    expect(generic.requiredFacts).toEqual(["sender_name", "incident_details"]);
+    expect(generic.requiredFacts).toEqual(["sender_name", "incident_details", "addressee_office", "copy_to"]);
   });
 });
 
@@ -71,6 +71,7 @@ describe("missingRequiredFacts — the gap loop's question source", () => {
       "incident_date",
       "incident_details",
       "addressee_office", // v2: every specific type asks who the letter goes to
+      "copy_to", // v3: ...and who should get a copy
     ]);
   });
 
@@ -88,8 +89,11 @@ describe("missingRequiredFacts — the gap loop's question source", () => {
       incident_place: "மாதிரி சந்தை",
       incident_details: "என் கைப்பை திருடப்பட்டது",
     };
-    expect(hasAllRequiredFacts(police, facts)).toBe(false); // addressee_office still missing (v2)
-    expect(hasAllRequiredFacts(police, { ...facts, addressee_office: "மாதிரி காவல் நிலையம்" })).toBe(true);
+    expect(hasAllRequiredFacts(police, facts)).toBe(false); // addressee_office + copy_to still missing
+    expect(hasAllRequiredFacts(police, { ...facts, addressee_office: "மாதிரி காவல் நிலையம்" })).toBe(false);
+    expect(
+      hasAllRequiredFacts(police, { ...facts, addressee_office: "மாதிரி காவல் நிலையம்", copy_to: "மாவட்ட SP அலுவலகம்" }),
+    ).toBe(true);
   });
 });
 

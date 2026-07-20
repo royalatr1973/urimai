@@ -39,17 +39,18 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
       });
       return r.draft;
     },
-    // Addressee resolution (user decision, July 2026): WEB SEARCH of official gov.in
-    // sources first, curator directory as the fallback when search finds nothing
-    // usable. The user's own stated addressee always wins inside the drafter.
-    resolveAddressee: async (type, facts) => {
-      const userNamedAddressee = Boolean(facts.addressee_name || facts.addressee_office || facts.addressee_address);
+    // Addressee resolution (user decision, July 2026): the flow ASKS the user for both
+    // the To office and the copy addressee; this runs only for the parts they answered
+    // "தெரியலை" to — web search of official gov.in sources first, curator directory as
+    // the fallback when search finds nothing usable.
+    resolveAddressee: async (type, facts, need) => {
+      if (!need.to && !need.cc) return { to: null, cc: [] };
       const found = await searchAddressee(type, facts); // never throws; nulls on failure
       const offices = await listLatestOffices();
-      const to = userNamedAddressee ? null : found.to ?? pickToOffice(offices, type.id);
+      const to = need.to ? found.to ?? pickToOffice(offices, type.id) : null;
       const toKey = found.to ? undefined : (pickToOffice(offices, type.id)?.id ?? undefined);
-      const cc = found.cc.length > 0 ? found.cc : pickCcOffices(offices, type.id, toKey);
-      return { to, cc: cc.slice(0, 2) };
+      const cc = need.cc ? (found.cc.length > 0 ? found.cc : pickCcOffices(offices, type.id, toKey)).slice(0, 2) : [];
+      return { to, cc };
     },
     logDraft: (input) => saveLetterDraft(input),
     logApproval: (input) => {

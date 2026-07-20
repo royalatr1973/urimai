@@ -8,10 +8,11 @@ describe("revision cap (§7.6 — cap at N, then offer escalation)", () => {
     const orch = createLettersOrchestrator({ ...f.deps, revisionCap: 2 });
     const sid = "cap";
 
-    // Reach the read-back with minimal facts (generic requires name + details).
-    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்" });
-    await orch.handleTurn(sid, "ஒரு மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
-    const rb = await orch.handleTurn(sid, "ஆம்");
+    // Reach the read-back (generic v3 asks addressee + copy too).
+    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    await orch.handleTurn(sid, "வட்டாட்சியருக்கு ஒரு மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
+    await orch.handleTurn(sid, "ஆம்"); // → copy_to question
+    const rb = await orch.handleTurn(sid, "வேண்டாம்");
     expect(rb.kind).toBe("readback");
 
     // Two corrections pass...

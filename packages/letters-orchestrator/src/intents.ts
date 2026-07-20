@@ -162,3 +162,13 @@ export function isDontKnow(text: string): boolean {
   if (!t) return false;
   return DONT_KNOW.some((p) => t === p || t.includes(p));
 }
+
+/**
+ * "Not needed" — a whole-message decline of an offered extra (e.g. the நகல் copy).
+ * Distinct from "தெரியலை": declining means NONE, don't-know means "find one for me".
+ */
+const NO_NEED = new Set(["வேண்டாம்", "வேணாம்", "இல்லை", "இல்ல", "தேவையில்லை", "தேவை இல்லை", "no", "not needed", "no need", "nope"]);
+
+export function isNoNeed(text: string): boolean {
+  return NO_NEED.has(normalize(text));
+}

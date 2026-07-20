@@ -27,4 +27,4 @@ export {
   confirmTypePrompt,
   type LetterQuestion,
 } from "./questions.js";
-export { classifyReviewReply, isApproval, isDontKnow, isNo, isYes, type ReviewReply } from "./intents.js";
+export { classifyReviewReply, isApproval, isDontKnow, isNo, isNoNeed, isYes, type ReviewReply } from "./intents.js";

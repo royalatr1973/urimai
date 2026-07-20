@@ -72,18 +72,27 @@ describe("full letters conversation", () => {
     if (t4.kind !== "question") throw new Error("unreachable");
     expect(t4.fact).toBe("addressee_office");
 
-    // Turn 4b — "தெரியலை" skips it: the resolved (web/directory) office fills the
-    // addressee, the draft appears, and the SPOKEN disclaimer is the LAST chunk —
-    // told to the user, never printed on the letter.
+    // Turn 4b — "தெரியலை" to the addressee: the COPY question is asked next (v3 —
+    // both To and copy are always asked before anything is searched).
     const t4b = await orch.handleTurn(sid, "தெரியலை");
-    expect(t4b.kind).toBe("readback");
-    if (t4b.kind !== "readback") throw new Error("unreachable");
-    expect(t4b.revisions).toBe(0);
-    expect(t4b.draft.addresseeBlock).toBe("தேடல்-அலுவலகம்"); // resolved To office used
-    expect(f.calls.resolve).toBe(1); // addressee resolved exactly once per letter
-    expect(t4b.chunks.at(-1)).toContain("AI"); // spoken disclaimer, appended after the letter
-    expect(assembleTextHasNoDisclaimer(t4b.draft)).toBe(true);
-    expect(t4b.draft.bodyParagraphs.join()).toContain("திருட்டு");
+    expect(t4b.kind).toBe("question");
+    if (t4b.kind !== "question") throw new Error("unreachable");
+    expect(t4b.fact).toBe("copy_to");
+    expect(f.calls.resolve).toBe(0); // nothing searched yet
+
+    // Turn 4c — "தெரியலை" to the copy too: NOW the search runs (once, for both), the
+    // found To office fills the addressee, the found CC lands on the நகல் line, and
+    // the SPOKEN disclaimer is the last chunk — never printed on the letter.
+    const t4c = await orch.handleTurn(sid, "தெரியலை");
+    expect(t4c.kind).toBe("readback");
+    if (t4c.kind !== "readback") throw new Error("unreachable");
+    expect(t4c.revisions).toBe(0);
+    expect(t4c.draft.addresseeBlock).toBe("தேடல்-அலுவலகம்"); // search-found To office
+    expect(t4c.draft.copyTo).toContain("நகல்-அலுவலகம் (search)"); // search-found CC
+    expect(f.calls.resolve).toBe(1); // resolved exactly once per letter
+    expect(t4c.chunks.at(-1)).toContain("AI"); // spoken disclaimer, appended after the letter
+    expect(assembleTextHasNoDisclaimer(t4c.draft)).toBe(true);
+    expect(t4c.draft.bodyParagraphs.join()).toContain("திருட்டு");
     expect(f.drafts).toHaveLength(1);
 
     // Turn 5a — an ambiguous reply gets ONE clarifying question: no re-draft, no
@@ -129,21 +138,43 @@ describe("full letters conversation", () => {
     expect(r.typeId).toBe("generic_petition");
   });
 
-  it("'நகல் வேண்டாம்' at read-back drops the curated CC and reports the removal", async () => {
+  it("copy question: 'தெரியலை' → searched CC; later 'நகல் வேண்டாம்' at read-back removes it", async () => {
     const f = makeFakeDeps("generic_petition");
     const orch = createLettersOrchestrator(f.deps);
     const sid = "cc";
     f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்" });
     await orch.handleTurn(sid, "மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
-    const rb = await orch.handleTurn(sid, "ஆம்");
+    const q1 = await orch.handleTurn(sid, "ஆம்");
+    if (q1.kind !== "question") throw new Error(`expected question, got ${q1.kind}`);
+    expect(q1.fact).toBe("addressee_office");
+    const q2 = await orch.handleTurn(sid, "தெரியலை");
+    if (q2.kind !== "question") throw new Error(`expected question, got ${q2.kind}`);
+    expect(q2.fact).toBe("copy_to");
+    const rb = await orch.handleTurn(sid, "தெரியலை");
     if (rb.kind !== "readback") throw new Error(`expected readback, got ${rb.kind}`);
-    expect(rb.draft.copyTo).toContain("நகல்-அலுவலகம்"); // curated CC present by default
+    expect(rb.draft.copyTo).toContain("நகல்-அலுவலகம்"); // CC searched because user said don't-know
 
     f.queueExtract({});
     const r = await orch.handleTurn(sid, "நகல் வேண்டாம்");
     if (r.kind !== "readback") throw new Error(`expected readback, got ${r.kind}`);
     expect(r.draft.copyTo).toBeNull();
     expect(r.chunks.join()).toContain("நீக்கிவிட்டேன்"); // removal acknowledged, not "no change"
+  });
+
+  it("copy question: 'வேண்டாம்' means NO copy — nothing searched, நகல் line absent", async () => {
+    const f = makeFakeDeps("generic_petition");
+    const orch = createLettersOrchestrator(f.deps);
+    const sid = "nocc";
+    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    await orch.handleTurn(sid, "வட்டாட்சியருக்கு மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
+    const q = await orch.handleTurn(sid, "ஆம்");
+    if (q.kind !== "question") throw new Error(`expected question, got ${q.kind}`);
+    expect(q.fact).toBe("copy_to");
+    const rb = await orch.handleTurn(sid, "வேண்டாம்");
+    if (rb.kind !== "readback") throw new Error(`expected readback, got ${rb.kind}`);
+    expect(rb.draft.copyTo).toBeNull(); // declined — no CC of any kind
+    expect(rb.draft.addresseeBlock).toBe("வட்டாட்சியர் அலுவலகம்"); // user-stated To used as given
+    expect(f.calls.resolve).toBe(0); // and NO web search ran at all
   });
 
   it("'தெரியலை' on an asked fact skips it (blank later) and moves on without re-asking", async () => {

@@ -23,10 +23,10 @@ export function fakeDraft(
   type: LetterType,
   facts: LetterFacts,
   correctionNote?: string,
-  includeCuratedCc = true,
+  ccNames: string[] = [],
   toOffice?: { designationTamil: string } | null,
 ): LetterDraft {
-  const cc = [...(facts.copy_to ? [facts.copy_to] : []), ...(includeCuratedCc ? ["நகல்-அலுவலகம் (directory)"] : [])];
+  const cc = [...(facts.copy_to ? [facts.copy_to] : []), ...ccNames];
   return {
     letterTypeId: type.id,
     typeVersion: type.version,
@@ -81,11 +81,14 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
         req.correction && !/நகல்/.test(req.correction.instruction)
           ? `[திருத்தம்: ${req.correction.instruction}]`
           : undefined;
-      return fakeDraft(type, facts, note, req.includeCuratedCc, req.toOffice);
+      return fakeDraft(type, facts, note, (req.ccOffices ?? []).map((o) => o.designationTamil), req.toOffice);
     },
-    resolveAddressee: async () => {
+    resolveAddressee: async (_type, _facts, need) => {
       calls.resolve += 1;
-      return { to: { designationTamil: "தேடல்-அலுவலகம்", addressLines: ["Found St", "Chennai"], pincode: "600001" }, cc: [] };
+      return {
+        to: need.to ? { designationTamil: "தேடல்-அலுவலகம்", addressLines: ["Found St", "Chennai"], pincode: "600001" } : null,
+        cc: need.cc ? [{ designationTamil: "நகல்-அலுவலகம் (search)", addressLines: ["HQ", "Chennai"], pincode: "600002" }] : [],
+      };
     },
     logDraft: async (input) => {
       drafts.push({ revision: input.revision, draftHash: input.draftHash });

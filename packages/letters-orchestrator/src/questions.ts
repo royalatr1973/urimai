@@ -72,8 +72,8 @@ export const QUESTIONS: Record<FactKey, LetterQuestion> = {
     en: "Do you have any documents to attach?",
   },
   copy_to: {
-    ta: "இந்தக் கடிதத்தின் நகல் வேறு யாருக்காவது போக வேண்டுமா? வேண்டாம் என்றால் 'வேண்டாம்' என்று சொல்லுங்கள்.",
-    en: "Should a copy of this letter go to anyone else? Say 'no' if not.",
+    ta: "இந்தக் கடிதத்தின் நகல் (Copy) வேறு யாருக்காவது அனுப்ப வேண்டுமா? யாருக்கென்று சொல்லுங்கள். நகல் வேண்டாம் என்றால் 'வேண்டாம்' என்று சொல்லுங்கள்; யாருக்கு அனுப்பலாம் என்று தெரியாவிட்டால் 'தெரியலை' என்று சொல்லுங்கள் — நாங்களே பொருத்தமான அலுவலகத்தைத் தேடிப் போடுகிறோம்.",
+    en: "Should a copy (நகல்) of this letter go to anyone? Name them; say 'no' for no copy, or 'I don't know' and we'll find the right office.",
   },
 };
 

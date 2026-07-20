@@ -14,7 +14,7 @@ import type { FactKey, LetterDraft, LetterFacts, LetterType, OfficeAddress } fro
 import { missingRequiredFacts, resolveLanguage, resolveLetterType } from "@urimai/letter-types";
 import { draftHash } from "@urimai/docgen";
 import type { Classification } from "@urimai/letters-extractor";
-import { classifyReviewReply, isDontKnow, isNo, isYes } from "./intents.js";
+import { classifyReviewReply, isDontKnow, isNo, isNoNeed, isYes } from "./intents.js";
 import { chunkChangedReadback, chunkReadback } from "./readback.js";
 import {
   CHANGED_INTRO,
@@ -71,11 +71,12 @@ export interface LettersOrchestratorDeps {
   /** Type + facts → draft (LLM call 3 inside, guarded). Injected; swappable/testable. */
   draft: (type: LetterType, facts: LetterFacts, req: DraftRequest) => Promise<LetterDraft>;
   /**
-   * Resolve the To/CC offices for a letter (web search with directory fallback in the
-   * default wiring). Called ONCE per letter, before the first draft — never re-run on
-   * revisions, so the address cannot drift mid-review. Optional; failures tolerated.
+   * Resolve To/CC offices (web search with directory fallback in the default wiring).
+   * Called ONCE per letter, before the first draft, and ONLY for the parts the user
+   * said "தெரியலை" to (`need`) — a user-provided addressee is never second-guessed,
+   * and a declined copy is never searched. Optional; failures tolerated.
    */
-  resolveAddressee?: (type: LetterType, facts: LetterFacts) => Promise<ResolvedAddressee>;
+  resolveAddressee?: (type: LetterType, facts: LetterFacts, need: { to: boolean; cc: boolean }) => Promise<ResolvedAddressee>;
   /** Persist one draft revision; returns a draft id for the approval record. */
   logDraft?: (input: { sessionId: string; draft: LetterDraft; revision: number; draftHash: string }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
@@ -199,14 +200,24 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
   ): Promise<LetterTurnResult> {
     const language = resolveLanguage(type, state.facts);
 
-    // Resolve the To/CC offices ONCE per letter (web search → directory fallback in
-    // the default wiring). Revisions reuse the stored result — no drift mid-review.
-    if (state.resolved === undefined && deps.resolveAddressee) {
-      try {
-        state = { ...state, resolved: await deps.resolveAddressee(type, state.facts) };
-      } catch {
-        state = { ...state, resolved: { to: null, cc: [] } };
+    // Resolve To/CC ONCE per letter — and ONLY where the user said "தெரியலை"
+    // (live-tester rule, July 2026: ask the user first; search only on don't-know).
+    // A stated addressee is used as given; a declined copy ("வேண்டாம்") stays empty.
+    if (state.resolved === undefined) {
+      const userNamedTo = Boolean(state.facts.addressee_office || state.facts.addressee_name || state.facts.addressee_address);
+      const need = {
+        to: !userNamedTo && state.skipped.includes("addressee_office"),
+        cc: !state.ccDisabled && !state.facts.copy_to && state.skipped.includes("copy_to"),
+      };
+      let resolved: ResolvedAddressee = { to: null, cc: [] };
+      if ((need.to || need.cc) && deps.resolveAddressee) {
+        try {
+          resolved = await deps.resolveAddressee(type, state.facts, need);
+        } catch {
+          /* tolerated — blanks/hints apply */
+        }
       }
+      state = { ...state, resolved };
     }
 
     const draft = await deps.draft(type, state.facts, {
@@ -331,6 +342,21 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         facts: mergeFacts(state.facts, extra),
       };
       const type = resolveLetterType(types, typeId);
+      if (!type) throw new Error("letter-type catalogue is empty — cannot proceed");
+      return collectOrDraft(sessionId, next, type);
+    }
+
+    // Copy question: a whole-message "வேண்டாம்" means NO copy at all — no search,
+    // no curated CC, nothing (distinct from "தெரியலை" = find one for me).
+    if (state.phase === "collecting" && state.pendingFact === "copy_to" && isNoNeed(text)) {
+      const next: SessionState = {
+        ...state,
+        transcript,
+        ccDisabled: true,
+        skipped: [...state.skipped, "copy_to"],
+        pendingFact: null,
+      };
+      const type = resolveLetterType(types, next.typeId);
       if (!type) throw new Error("letter-type catalogue is empty — cannot proceed");
       return collectOrDraft(sessionId, next, type);
     }
