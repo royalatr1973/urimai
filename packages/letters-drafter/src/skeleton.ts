@@ -4,7 +4,7 @@
  * LetterType record + collected facts, in code. The LLM never touches these. Legal
  * citations enter the letter HERE, from the LetterType's legalRefs, and nowhere else.
  */
-import type { LetterFacts, LetterType, Office } from "@urimai/types";
+import type { LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
 
 export type Language = "ta" | "en" | "bilingual";
 
@@ -16,32 +16,28 @@ interface SkeletonStrings {
   closing: string;
   signaturePrefix: string; // "இப்படிக்கு," / "Yours faithfully,"
   signatureNote: string; // the signature / thumb-impression line
-  disclaimer: string; // AI-assistance notice, on every letter (live-tester request)
 }
 
+// NOTE: the AI disclaimer is deliberately NOT in the skeleton — it is spoken to the
+// user by the channel, never printed on the letter (live-tester decision, July 2026).
 const SKELETON: Record<Language, SkeletonStrings> = {
   ta: {
     salutation: "மதிப்பிற்குரிய ஐயா / அம்மையீர்,",
     closing: "தங்கள் கனிவான நடவடிக்கைக்கு என்றும் நன்றியுடன் இருப்பேன். நன்றி.",
     signaturePrefix: "இப்படிக்கு,",
     signatureNote: "(கையொப்பம் / இடது பெருவிரல் ரேகை)",
-    disclaimer:
-      "இந்தக் கடிதம் செயற்கை நுண்ணறிவு (AI) உதவியுடன் உருவாக்கப்பட்டது. தவறுகள் இருக்கக்கூடும் — அனுப்பும் முன் விவரங்களைச் சரிபார்க்கவும்.",
   },
   en: {
     salutation: "Respected Sir / Madam,",
     closing: "I shall remain grateful for your kind action. Thank you.",
     signaturePrefix: "Yours faithfully,",
     signatureNote: "(Signature / left thumb impression)",
-    disclaimer: "This letter was prepared with AI assistance. AI can make mistakes — please verify the details before submitting.",
   },
   bilingual: {
     salutation: "மதிப்பிற்குரிய ஐயா / அம்மையீர் (Respected Sir / Madam),",
     closing: "தங்கள் கனிவான நடவடிக்கைக்கு நன்றி. (Thank you for your kind action.)",
     signaturePrefix: "இப்படிக்கு (Yours faithfully),",
     signatureNote: "(கையொப்பம் / இடது பெருவிரல் ரேகை — Signature / left thumb impression)",
-    disclaimer:
-      "இந்தக் கடிதம் செயற்கை நுண்ணறிவு (AI) உதவியுடன் உருவாக்கப்பட்டது; தவறுகள் இருக்கக்கூடும். This letter was prepared with AI assistance; please verify before submitting.",
   },
 };
 
@@ -61,7 +57,7 @@ export function buildSenderBlock(facts: LetterFacts): string {
 }
 
 /** An office's full postal block: Tamil designation, address lines, pincode. */
-export function officeAddressBlock(office: Office): string {
+export function officeAddressBlock(office: OfficeAddress): string {
   const lines = [office.designationTamil, ...office.addressLines];
   if (office.pincode) {
     const last = lines.length - 1;
@@ -71,7 +67,7 @@ export function officeAddressBlock(office: Office): string {
 }
 
 /** A single நகல் line for an office: designation, plus the address when usable. */
-export function officeCcLine(office: Office): string {
+export function officeCcLine(office: OfficeAddress): string {
   const usable = office.addressLines.length > 0 && !office.addressLines.some((l) => l.toUpperCase().includes("ADDRESS_TO_VERIFY"));
   if (!usable) return office.designationTamil;
   const addr = office.addressLines.join(", ");
@@ -82,7 +78,7 @@ export function officeCcLine(office: Office): string {
  * Addressee precedence (§7.4 + live-tester feedback): what the USER stated wins; else
  * the curator DIRECTORY office for this letter type; else the type's addresseeHint.
  */
-export function buildAddresseeBlock(type: LetterType, facts: LetterFacts, toOffice?: Office | null): string {
+export function buildAddresseeBlock(type: LetterType, facts: LetterFacts, toOffice?: OfficeAddress | null): string {
   const lines = [facts.addressee_name, facts.addressee_office, facts.addressee_address].filter(
     (v): v is string => typeof v === "string" && v.length > 0,
   );
@@ -119,16 +115,12 @@ export function buildSignatureLine(facts: LetterFacts, language: Language): stri
  * "நகல்:" recipients: whoever the USER named first, then curated directory CC
  * offices — curator data, not model invention. null when there is nobody.
  */
-export function buildCopyTo(facts: LetterFacts, ccOffices: Office[] = []): string | null {
+export function buildCopyTo(facts: LetterFacts, ccOffices: OfficeAddress[] = []): string | null {
   const lines = [
     ...(facts.copy_to ? [facts.copy_to] : []),
     ...ccOffices.map((o) => officeCcLine(o)),
   ];
   return lines.length > 0 ? lines.join("\n") : null;
-}
-
-export function buildDisclaimer(language: Language): string {
-  return SKELETON[language].disclaimer;
 }
 
 /** dd-mm-yyyy, the common Tamil Nadu office format. */

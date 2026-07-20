@@ -230,11 +230,25 @@ export type LetterDraft = {
   bodyParagraphs: string[]; // the ONLY LLM-authored part
   closing: string;
   signatureLine: string; // supports thumb-impression wording
-  /** "நகல்:" (copy-to) recipients — ONLY from the user's words; null when none named. */
+  /** "நகல்:" (copy-to) recipients — user's words first, then curated/found offices; null when none. */
   copyTo: string | null;
-  /** Fixed AI-assistance disclaimer, rendered on every letter (live-tester request, July 2026). */
-  disclaimer: string;
+  // NOTE: the AI-assistance disclaimer is deliberately NOT part of the letter
+  // (live-tester decision, July 2026) — it is spoken to the USER during read-back
+  // and included in the delivery caption, but never printed on the document.
   language: "ta" | "en" | "bilingual";
+};
+
+/**
+ * A minimal addressee/CC office shape shared by the curator directory (Office) and
+ * web-search-found offices — everything the letter renderer needs.
+ */
+export type OfficeAddress = {
+  designationTamil: string;
+  designation?: string;
+  addressLines: string[];
+  pincode?: string | null;
+  /** Where this address came from (official URL or directory key) — logged, never printed. */
+  source?: string;
 };
 
 /** An empty profile — the safe fallback when nothing is known yet. */

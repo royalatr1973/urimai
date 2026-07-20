@@ -15,7 +15,6 @@ const draft: LetterDraft = {
   closing: "நன்றி.",
   signatureLine: "இப்படிக்கு,\nலட்சுமி",
   copyTo: null,
-  disclaimer: "AI உதவியுடன் உருவாக்கப்பட்டது.",
   language: "ta",
 };
 

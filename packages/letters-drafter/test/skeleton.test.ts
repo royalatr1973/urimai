@@ -18,8 +18,9 @@ describe("deterministic skeleton", () => {
     expect(draft.salutation).toContain("மதிப்பிற்குரிய"); // polite register (live-tester feedback)
     expect(draft.signatureLine).toContain("முருகன்");
     expect(draft.signatureLine).toContain("பெருவிரல்"); // thumb-impression wording
-    expect(draft.disclaimer).toContain("AI"); // every letter carries the AI notice
     expect(draft.copyTo).toBeNull(); // CC only when the user names someone
+    // The AI disclaimer is spoken by the channel, never printed — no field on the draft.
+    expect("disclaimer" in draft).toBe(false);
   });
 
   it("renders a copy-to line from the user's own words", async () => {

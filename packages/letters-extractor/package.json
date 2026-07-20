@@ -16,7 +16,8 @@
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "letters:smoke": "dotenv -e ../../.env -- tsx scripts/smoke.ts"
+    "letters:smoke": "dotenv -e ../../.env -- tsx scripts/smoke.ts",
+    "addressee:smoke": "dotenv -e ../../.env -- tsx scripts/addressee-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",

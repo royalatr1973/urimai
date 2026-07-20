@@ -6,7 +6,7 @@
 import { getRedis } from "@urimai/cache";
 import { listLatestLetterTypes, listLatestOffices, saveLetterApproval, saveLetterDraft } from "@urimai/db";
 import { pickCcOffices, pickToOffice } from "@urimai/letter-types";
-import { classifyLetter, extractLetterFacts } from "@urimai/letters-extractor";
+import { classifyLetter, extractLetterFacts, searchAddressee } from "@urimai/letters-extractor";
 import { draftLetter } from "@urimai/letters-drafter";
 import { createLettersOrchestrator, type SessionStore } from "./orchestrator.js";
 
@@ -29,22 +29,26 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
     loadTypes: () => listLatestLetterTypes(),
     classify: (text, types) => classifyLetter(text, types),
     extract: (text, pendingFact) => extractLetterFacts(text, { pendingFact }),
-    // The addressee directory is resolved HERE, around the drafter call — the
-    // orchestrator core stays pure of it. User-stated addressee wins; the directory
-    // fills in only when the user named nobody. Curated CC per the ccFor mapping,
-    // unless the user asked to drop it.
     draft: async (type, facts, req) => {
-      const offices = await listLatestOffices();
-      const userNamedAddressee = Boolean(facts.addressee_name || facts.addressee_office || facts.addressee_address);
-      const toOffice = userNamedAddressee ? null : pickToOffice(offices, type.id);
-      const ccOffices = req.includeCuratedCc ? pickCcOffices(offices, type.id, toOffice?.id) : [];
       const r = await draftLetter(type, facts, {
         language: req.language,
         correction: req.correction,
-        toOffice,
-        ccOffices,
+        toOffice: req.toOffice,
+        ccOffices: req.ccOffices ?? [],
       });
       return r.draft;
+    },
+    // Addressee resolution (user decision, July 2026): WEB SEARCH of official gov.in
+    // sources first, curator directory as the fallback when search finds nothing
+    // usable. The user's own stated addressee always wins inside the drafter.
+    resolveAddressee: async (type, facts) => {
+      const userNamedAddressee = Boolean(facts.addressee_name || facts.addressee_office || facts.addressee_address);
+      const found = await searchAddressee(type, facts); // never throws; nulls on failure
+      const offices = await listLatestOffices();
+      const to = userNamedAddressee ? null : found.to ?? pickToOffice(offices, type.id);
+      const toKey = found.to ? undefined : (pickToOffice(offices, type.id)?.id ?? undefined);
+      const cc = found.cc.length > 0 ? found.cc : pickCcOffices(offices, type.id, toKey);
+      return { to, cc: cc.slice(0, 2) };
     },
     logDraft: (input) => saveLetterDraft(input),
     logApproval: (input) => {

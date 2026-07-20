@@ -14,7 +14,6 @@ export {
   BLANK,
   buildAddresseeBlock,
   buildCopyTo,
-  buildDisclaimer,
   buildSenderBlock,
   buildSignatureLine,
   buildSubject,

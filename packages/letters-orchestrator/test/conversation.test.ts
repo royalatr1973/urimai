@@ -4,8 +4,13 @@
  * approval logged, and the session cleared after approval.
  */
 import { describe, it, expect } from "vitest";
+import type { LetterDraft } from "@urimai/types";
+import { assembleLetterText } from "@urimai/docgen";
 import { createLettersOrchestrator } from "../src/orchestrator.js";
 import { makeFakeDeps } from "./helpers.js";
+
+/** The printed letter text must never carry the AI disclaimer (voice-only). */
+const assembleTextHasNoDisclaimer = (draft: LetterDraft) => !assembleLetterText(draft).includes("AI");
 
 describe("full letters conversation", () => {
   it("drives narration → confirm → gap loop → readback → correction → approval", async () => {
@@ -48,12 +53,17 @@ describe("full letters conversation", () => {
     if (t4.kind !== "question") throw new Error("unreachable");
     expect(t4.fact).toBe("addressee_office");
 
-    // Turn 4b — "தெரியலை" skips it (the letter uses the type's hint): draft appears.
+    // Turn 4b — "தெரியலை" skips it: the resolved (web/directory) office fills the
+    // addressee, the draft appears, and the SPOKEN disclaimer is the LAST chunk —
+    // told to the user, never printed on the letter.
     const t4b = await orch.handleTurn(sid, "தெரியலை");
     expect(t4b.kind).toBe("readback");
     if (t4b.kind !== "readback") throw new Error("unreachable");
     expect(t4b.revisions).toBe(0);
-    expect(t4b.chunks.length).toBeGreaterThan(0);
+    expect(t4b.draft.addresseeBlock).toBe("தேடல்-அலுவலகம்"); // resolved To office used
+    expect(f.calls.resolve).toBe(1); // addressee resolved exactly once per letter
+    expect(t4b.chunks.at(-1)).toContain("AI"); // spoken disclaimer, appended after the letter
+    expect(assembleTextHasNoDisclaimer(t4b.draft)).toBe(true);
     expect(t4b.draft.bodyParagraphs.join()).toContain("திருட்டு");
     expect(f.drafts).toHaveLength(1);
 
@@ -71,6 +81,7 @@ describe("full letters conversation", () => {
     if (t5.kind !== "readback") throw new Error("unreachable");
     expect(t5.revisions).toBe(1);
     expect(t5.changedOnly).toBe(true);
+    expect(f.calls.resolve).toBe(1); // NOT re-resolved on revision — no address drift
     expect(t5.chunks.join()).toContain("திருத்தம்"); // the changed paragraph is spoken...
     expect(t5.chunks.join()).not.toContain("அனுப்புநர்"); // ...but the unchanged header is not
     expect(t5.draft.bodyParagraphs.join()).toContain("திருத்தம்");

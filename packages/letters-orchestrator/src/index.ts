@@ -11,6 +11,7 @@ export {
   type LettersOrchestrator,
   type LettersOrchestratorDeps,
   type LetterTurnResult,
+  type ResolvedAddressee,
   type SessionStore,
 } from "./orchestrator.js";
 export { createDefaultLettersOrchestrator, type DefaultLettersOrchestratorOptions } from "./default.js";
@@ -22,6 +23,7 @@ export {
   NO_CHANGE_NEEDED,
   QUESTIONS,
   READBACK_PROMPT,
+  SPOKEN_DISCLAIMER,
   confirmTypePrompt,
   type LetterQuestion,
 } from "./questions.js";

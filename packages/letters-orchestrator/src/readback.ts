@@ -28,7 +28,6 @@ function draftBlocks(draft: LetterDraft): string[] {
     draft.closing,
     draft.signatureLine,
     ...(draft.copyTo ? [`${L.copyTo} ${draft.copyTo}`] : []),
-    ...(draft.disclaimer ? [draft.disclaimer] : []),
   ];
 }
 

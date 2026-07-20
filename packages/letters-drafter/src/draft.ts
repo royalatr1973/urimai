@@ -5,7 +5,7 @@
  * user's own words. Drafting never throws and never ships invented content.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import type { LetterDraft, LetterFacts, LetterType, Office } from "@urimai/types";
+import type { LetterDraft, LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
 import { buildFallbackBody } from "./fallback.js";
 import { checkBodyAgainstFacts } from "./guard.js";
 import { buildDraftUserPrompt, DRAFT_SYSTEM_PROMPT, type CorrectionContext } from "./prompt.js";
@@ -13,7 +13,6 @@ import {
   buildAddresseeBlock,
   buildClosing,
   buildCopyTo,
-  buildDisclaimer,
   buildSalutation,
   buildSenderBlock,
   buildSignatureLine,
@@ -44,10 +43,10 @@ export interface DraftOptions {
   date?: string;
   /** Read-back correction: the change the user asked for, plus the body it applies to. */
   correction?: CorrectionContext;
-  /** Directory office to address the letter TO when the user named none (curator data). */
-  toOffice?: Office | null;
-  /** Directory offices to CC (நகல்) per the curator's ccFor mapping. */
-  ccOffices?: Office[];
+  /** Office to address the letter TO when the user named none (directory or web-found). */
+  toOffice?: OfficeAddress | null;
+  /** Offices to CC (நகல்) — curated ccFor mapping or web-found. */
+  ccOffices?: OfficeAddress[];
 }
 
 export interface DraftOutcome {
@@ -135,7 +134,6 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
       closing: buildClosing(language),
       signatureLine: buildSignatureLine(facts, language),
       copyTo: buildCopyTo(facts, opts.ccOffices ?? []),
-      disclaimer: buildDisclaimer(language),
       language,
     },
     bodySource,

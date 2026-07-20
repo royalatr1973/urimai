@@ -19,21 +19,26 @@ export function memoryStore(): SessionStore & { map: Map<string, string> } {
 export const emptyFacts = (): LetterFacts => ({ letterTypeId: null, language: null });
 
 /** A deterministic fake drafter: body = the collected facts, verbatim. */
-export function fakeDraft(type: LetterType, facts: LetterFacts, correctionNote?: string, includeCuratedCc = true): LetterDraft {
+export function fakeDraft(
+  type: LetterType,
+  facts: LetterFacts,
+  correctionNote?: string,
+  includeCuratedCc = true,
+  toOffice?: { designationTamil: string } | null,
+): LetterDraft {
   const cc = [...(facts.copy_to ? [facts.copy_to] : []), ...(includeCuratedCc ? ["நகல்-அலுவலகம் (directory)"] : [])];
   return {
     letterTypeId: type.id,
     typeVersion: type.version,
     senderBlock: facts.sender_name ?? "________",
     date: "19-07-2026",
-    addresseeBlock: facts.addressee_office ?? "office",
+    addresseeBlock: facts.addressee_office ?? toOffice?.designationTamil ?? "office",
     subject: type.nameTamil,
     salutation: "ஐயா,",
     bodyParagraphs: [facts.incident_details ?? "________", ...(correctionNote ? [correctionNote] : [])],
     closing: "நன்றி.",
     signatureLine: `இப்படிக்கு,\n${facts.sender_name ?? "________"}`,
     copyTo: cc.length > 0 ? cc.join("\n") : null,
-    disclaimer: "AI உதவியுடன் உருவாக்கப்பட்டது.",
     language: "ta",
   };
 }
@@ -41,7 +46,7 @@ export function fakeDraft(type: LetterType, facts: LetterFacts, correctionNote?:
 export interface FakeDeps {
   deps: LettersOrchestratorDeps;
   store: ReturnType<typeof memoryStore>;
-  calls: { classify: string[]; extract: Array<{ text: string; pendingFact: string | null }>; draft: number };
+  calls: { classify: string[]; extract: Array<{ text: string; pendingFact: string | null }>; draft: number; resolve: number };
   drafts: Array<{ revision: number; draftHash: string }>;
   approvals: Array<{ draftId: string | null; approvalUtterance: string; revisions: number }>;
   /** Script the next extraction result(s); consumed in order, then empty facts. */
@@ -51,7 +56,7 @@ export interface FakeDeps {
 export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
   const store = memoryStore();
   const extractQueue: Partial<LetterFacts>[] = [];
-  const calls: FakeDeps["calls"] = { classify: [], extract: [], draft: 0 };
+  const calls: FakeDeps["calls"] = { classify: [], extract: [], draft: 0, resolve: 0 };
   const drafts: FakeDeps["drafts"] = [];
   const approvals: FakeDeps["approvals"] = [];
   let draftSeq = 0;
@@ -76,7 +81,11 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
         req.correction && !/நகல்/.test(req.correction.instruction)
           ? `[திருத்தம்: ${req.correction.instruction}]`
           : undefined;
-      return fakeDraft(type, facts, note, req.includeCuratedCc);
+      return fakeDraft(type, facts, note, req.includeCuratedCc, req.toOffice);
+    },
+    resolveAddressee: async () => {
+      calls.resolve += 1;
+      return { to: { designationTamil: "தேடல்-அலுவலகம்", addressLines: ["Found St", "Chennai"], pincode: "600001" }, cc: [] };
     },
     logDraft: async (input) => {
       drafts.push({ revision: input.revision, draftHash: input.draftHash });

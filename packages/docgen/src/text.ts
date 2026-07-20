@@ -54,7 +54,6 @@ export function assembleLetterText(draft: LetterDraft): string {
     "",
     draft.signatureLine,
     ...(draft.copyTo ? ["", `${L.copyTo} ${draft.copyTo}`] : []),
-    ...(draft.disclaimer ? ["", draft.disclaimer] : []),
   ].join("\n");
 }
 

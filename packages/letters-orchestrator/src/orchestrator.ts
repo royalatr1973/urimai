@@ -10,7 +10,7 @@
  *  - Every draft revision and the approval are persisted via injected sinks (§2.7).
  *  - The gap loop asks ONE question at a time and never re-asks known facts (§7.4).
  */
-import type { FactKey, LetterDraft, LetterFacts, LetterType } from "@urimai/types";
+import type { FactKey, LetterDraft, LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
 import { missingRequiredFacts, resolveLanguage, resolveLetterType } from "@urimai/letter-types";
 import { draftHash } from "@urimai/docgen";
 import type { Classification } from "@urimai/letters-extractor";
@@ -25,6 +25,7 @@ import {
   QUESTIONS,
   READBACK_PROMPT,
   REMOVED_NOTE,
+  SPOKEN_DISCLAIMER,
   type LetterQuestion,
 } from "./questions.js";
 
@@ -41,6 +42,16 @@ export interface DraftRequest {
   language: LetterType["languageDefault"];
   /** false after the user asked to drop the curated நகல் recipients. */
   includeCuratedCc: boolean;
+  /** Resolved To office (web-found or directory); the user's stated addressee still wins. */
+  toOffice?: OfficeAddress | null;
+  /** Resolved CC offices — already gated by includeCuratedCc. */
+  ccOffices?: OfficeAddress[];
+}
+
+/** Resolved To/CC offices for one letter — computed once, reused across revisions. */
+export interface ResolvedAddressee {
+  to: OfficeAddress | null;
+  cc: OfficeAddress[];
 }
 
 export interface LettersOrchestratorDeps {
@@ -53,6 +64,12 @@ export interface LettersOrchestratorDeps {
   extract: (text: string, pendingFact: FactKey | null) => Promise<LetterFacts>;
   /** Type + facts → draft (LLM call 3 inside, guarded). Injected; swappable/testable. */
   draft: (type: LetterType, facts: LetterFacts, req: DraftRequest) => Promise<LetterDraft>;
+  /**
+   * Resolve the To/CC offices for a letter (web search with directory fallback in the
+   * default wiring). Called ONCE per letter, before the first draft — never re-run on
+   * revisions, so the address cannot drift mid-review. Optional; failures tolerated.
+   */
+  resolveAddressee?: (type: LetterType, facts: LetterFacts) => Promise<ResolvedAddressee>;
   /** Persist one draft revision; returns a draft id for the approval record. */
   logDraft?: (input: { sessionId: string; draft: LetterDraft; revision: number; draftHash: string }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
@@ -105,6 +122,8 @@ interface SessionState {
   draftId: string | null;
   /** User said drop the curated நகல் recipients — stays off for this letter. */
   ccDisabled: boolean;
+  /** To/CC offices resolved once for this letter; undefined = not yet attempted. */
+  resolved?: ResolvedAddressee;
 }
 
 const EMPTY_STATE: SessionState = {
@@ -160,7 +179,24 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     prevDraft?: LetterDraft,
   ): Promise<LetterTurnResult> {
     const language = resolveLanguage(type, state.facts);
-    const draft = await deps.draft(type, state.facts, { correction, language, includeCuratedCc: !state.ccDisabled });
+
+    // Resolve the To/CC offices ONCE per letter (web search → directory fallback in
+    // the default wiring). Revisions reuse the stored result — no drift mid-review.
+    if (state.resolved === undefined && deps.resolveAddressee) {
+      try {
+        state = { ...state, resolved: await deps.resolveAddressee(type, state.facts) };
+      } catch {
+        state = { ...state, resolved: { to: null, cc: [] } };
+      }
+    }
+
+    const draft = await deps.draft(type, state.facts, {
+      correction,
+      language,
+      includeCuratedCc: !state.ccDisabled,
+      toOffice: state.resolved?.to ?? null,
+      ccOffices: state.ccDisabled ? [] : state.resolved?.cc ?? [],
+    });
     const hash = draftHash(draft);
     const draftId = deps.logDraft
       ? await deps.logDraft({ sessionId, draft, revision: state.revisions, draftHash: hash })
@@ -178,7 +214,9 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
             : [NO_CHANGE_NEEDED.ta];
       return { kind: "readback", draft, chunks, revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: true };
     }
-    return { kind: "readback", draft, chunks: chunkReadback(draft), revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: false };
+    // Full read-back ends with the SPOKEN disclaimer — told to the user, never printed.
+    const chunks = [...chunkReadback(draft), SPOKEN_DISCLAIMER.ta];
+    return { kind: "readback", draft, chunks, revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: false };
   }
 
   /** Gap loop step: ask the next missing required fact, or draft when complete (§7.4–7.5). */

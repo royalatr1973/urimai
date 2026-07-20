@@ -106,6 +106,15 @@ export const REMOVED_NOTE: LetterQuestion = {
   en: "Removed as you asked.",
 };
 
+/**
+ * Spoken AI disclaimer — told to the USER at read-back and delivery, but never printed
+ * on the letter itself (live-tester decision, July 2026).
+ */
+export const SPOKEN_DISCLAIMER: LetterQuestion = {
+  ta: "ஒரு குறிப்பு: இந்தக் கடிதம் செயற்கை நுண்ணறிவு (AI) உதவியுடன் உருவாக்கப்பட்டது. தவறுகள் இருக்கக்கூடும் — அனுப்பும் முன் விவரங்களைச் சரிபார்த்துக் கொள்ளுங்கள்.",
+  en: "A note: this letter was prepared with AI assistance. AI can make mistakes — please verify the details before submitting.",
+};
+
 /** When the review reply is neither a clear yes nor a stated change (§2.1 — never guess). */
 export const CLARIFY_PROMPT: LetterQuestion = {
   ta: "மன்னிக்கவும், சரியாகப் புரியவில்லை. கடிதம் சரியென்றால் 'சரி' என்று மட்டும் சொல்லுங்கள்; மாற்ற வேண்டியிருந்தால், எதை எப்படி மாற்ற வேண்டும் என்று சொல்லுங்கள்.",

@@ -7,6 +7,15 @@
  * drafting is Phase 3, and nothing here ever invents a fact (§2.1–2.2).
  */
 export { classifyLetter, GENERIC_FALLBACK_ID } from "./classify.js";
+export {
+  buildAddresseeSearchPrompt,
+  OFFICIAL_DOMAINS,
+  parseAddresseeSearch,
+  searchAddressee,
+  type AddresseeSearchResult,
+  type SearchAddresseeOptions,
+  type SearchClient,
+} from "./addressee.js";
 export { extractLetterFacts, type ExtractFactsOptions } from "./extract.js";
 export { parseClassification, parseLetterFacts, sanitizeLetterFacts, type Classification } from "./schema.js";
 export {
