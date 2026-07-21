@@ -223,6 +223,8 @@ export type GrievanceCategory = {
   issueExamples: string[]; // real-world phrasings for classification
   to: string; // competent first-stop designation, e.g. "Tahsildar"
   cc: string[]; // supervisory chain above it, nearest first
+  /** Case data this grievance needs (e.g. survey_number, deceased_name) — asked one at a time. */
+  entitiesRequired: string[];
   version: number;
   source: string;
   verified: boolean;
@@ -232,6 +234,8 @@ export type GrievanceCategory = {
 export type LetterFacts = Partial<Record<FactKey, string>> & {
   letterTypeId: string | null; // classified, user-confirmable
   language: "ta" | "en" | "bilingual" | null;
+  /** Category-specific case data (keys from GrievanceCategory.entitiesRequired), captured verbatim. */
+  entities?: Record<string, string>;
 };
 
 /** Structured draft — blocks, so read-back can chunk and corrections can target a block. */

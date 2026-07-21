@@ -60,6 +60,7 @@ export function createMadalHandler(deps: MadalHandlerDeps) {
         await deps.speak(from, r.prompt.ta);
         return;
       case "question":
+      case "entity_question":
         await deps.speak(from, r.question.ta);
         return;
       case "clarify":

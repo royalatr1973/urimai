@@ -77,6 +77,87 @@ export const QUESTIONS: Record<FactKey, LetterQuestion> = {
   },
 };
 
+/**
+ * Curated Tamil questions for the most common grievance-entity keys (controlled
+ * vocabulary from data/grievance_categories.csv). Unmapped keys get the mechanical
+ * fallback below — curator can promote them here over time.
+ */
+const ENTITY_QUESTIONS: Record<string, LetterQuestion> = {
+  village: { ta: "எந்த கிராமம் / ஊர்? தெரியாவிட்டால் 'தெரியலை' சொல்லுங்கள்.", en: "Which village/town?" },
+  taluk: { ta: "எந்த வட்டம் (தாலுகா)? தெரியாவிட்டால் 'தெரியலை' சொல்லுங்கள்.", en: "Which taluk?" },
+  district: { ta: "எந்த மாவட்டம்?", en: "Which district?" },
+  street_name: { ta: "எந்த தெரு / பகுதி?", en: "Which street/area?" },
+  ward_number: { ta: "வார்டு எண் தெரியுமா? தெரியாவிட்டால் 'தெரியலை' சொல்லுங்கள்.", en: "Ward number, if known?" },
+  door_number: { ta: "கதவு எண் என்ன?", en: "Door number?" },
+  survey_number: { ta: "சர்வே எண் தெரியுமா? தெரியாவிட்டால் 'தெரியலை' சொல்லுங்கள்.", en: "Survey number, if known?" },
+  patta_number: { ta: "பட்டா எண் தெரியுமா? தெரியாவிட்டால் 'தெரியலை' சொல்லுங்கள்.", en: "Patta number, if known?" },
+  extent: { ta: "நில அளவு எவ்வளவு (ஏக்கர்/சென்ட்)?", en: "Land extent (acres/cents)?" },
+  document_number: { ta: "ஆவண (பத்திரம்) எண் தெரியுமா?", en: "Document number, if known?" },
+  registration_year: { ta: "எந்த வருஷம் பதிவு செய்யப்பட்டது?", en: "Year of registration?" },
+  sub_registrar_office: { ta: "எந்த சார்பதிவாளர் அலுவலகம்?", en: "Which sub-registrar office?" },
+  application_number: { ta: "விண்ணப்ப எண் தெரியுமா? தெரியாவிட்டால் 'தெரியலை' சொல்லுங்கள்.", en: "Application number, if known?" },
+  application_date: { ta: "எப்போது விண்ணப்பித்தீர்கள்?", en: "When did you apply?" },
+  purpose: { ta: "எந்த தேவைக்காக (பள்ளி சேர்க்கை, வேலை, கடன் போன்று)?", en: "For what purpose?" },
+  deceased_name: { ta: "இறந்தவரின் பெயர் என்ன?", en: "Name of the deceased?" },
+  date_of_death: { ta: "இறந்த தேதி எப்போது?", en: "Date of death?" },
+  relationship_to_deceased: { ta: "இறந்தவருக்கும் உங்களுக்கும் என்ன உறவு?", en: "Your relationship to the deceased?" },
+  person_name: { ta: "யாருடைய பெயரில் சான்றிதழ் — அவர் பெயர் என்ன?", en: "Whose certificate — their name?" },
+  event_date: { ta: "நிகழ்வு (பிறப்பு/இறப்பு) தேதி எப்போது?", en: "Date of the event?" },
+  place_of_event: { ta: "எந்த இடத்தில் (ஊர்/மருத்துவமனை) நடந்தது?", en: "Place of the event?" },
+  registration_number: { ta: "பதிவு எண் தெரியுமா?", en: "Registration number, if known?" },
+  ration_card_number: { ta: "குடும்ப அட்டை எண் என்ன?", en: "Ration card number?" },
+  member_name: { ta: "எந்த உறுப்பினர் — பெயர் என்ன?", en: "Which member — name?" },
+  relationship: { ta: "உங்களுக்கு அவருக்கும் என்ன உறவு?", en: "Relationship?" },
+  shop_number: { ta: "ரேஷன் கடை எண் தெரியுமா?", en: "Ration shop number, if known?" },
+  consumer_number: { ta: "கன்சூமர் எண் (இணைப்பு எண்) என்ன?", en: "Consumer number?" },
+  meter_number: { ta: "மீட்டர் எண் தெரியுமா?", en: "Meter number, if known?" },
+  police_station: { ta: "எந்த காவல் நிலையம்?", en: "Which police station?" },
+  fir_number: { ta: "FIR / CSR எண் இருந்தால் சொல்லுங்கள்; இல்லாவிட்டால் 'இல்லை'.", en: "FIR/CSR number if any?" },
+  vehicle_number: { ta: "வாகன எண் என்ன?", en: "Vehicle number?" },
+  bank_name: { ta: "எந்த வங்கி?", en: "Which bank?" },
+  hospital_name: { ta: "எந்த மருத்துவமனை?", en: "Which hospital?" },
+  patient_name: { ta: "நோயாளியின் பெயர் என்ன?", en: "Patient's name?" },
+  visit_date: { ta: "எப்போது போனீர்கள்?", en: "When did you visit?" },
+  school_name: { ta: "எந்த பள்ளி?", en: "Which school?" },
+  student_name: { ta: "மாணவர் / மாணவியின் பெயர் என்ன?", en: "Student's name?" },
+  class_standard: { ta: "எந்த வகுப்பு?", en: "Which class?" },
+  institution_name: { ta: "எந்த கல்வி நிறுவனம் / கல்லூரி?", en: "Which institution?" },
+  employer_name: { ta: "வேலை கொடுத்தவர் / நிறுவனத்தின் பெயர் என்ன?", en: "Employer's name?" },
+  work_place: { ta: "எங்கே வேலை செய்தீர்கள்?", en: "Place of work?" },
+  work_period: { ta: "எந்த காலம் வேலை செய்தீர்கள்?", en: "Period of work?" },
+  shop_name: { ta: "எந்த கடை / நிறுவனம்?", en: "Which shop?" },
+  product_name: { ta: "என்ன பொருள்?", en: "Which product?" },
+  purchase_date: { ta: "எப்போது வாங்கினீர்கள்?", en: "When purchased?" },
+  bill_number: { ta: "பில் எண் இருந்தால் சொல்லுங்கள்.", en: "Bill number if any?" },
+  epic_number: { ta: "வாக்காளர் அடையாள (EPIC) எண் என்ன?", en: "EPIC number?" },
+  enrolment_number: { ta: "பதிவு (enrolment) எண் தெரியுமா?", en: "Enrolment number, if known?" },
+  case_number: { ta: "வழக்கு எண் என்ன?", en: "Case number?" },
+  court_name: { ta: "எந்த நீதிமன்றம்?", en: "Which court?" },
+  temple_name: { ta: "எந்த கோவில்?", en: "Which temple?" },
+  waterbody_name: { ta: "எந்த ஏரி / குளம் / கால்வாய்?", en: "Which waterbody?" },
+  crop_name: { ta: "என்ன பயிர்?", en: "Which crop?" },
+  season: { ta: "எந்த பருவம் (சம்பா/குறுவை போன்று)?", en: "Which season?" },
+  office_name: { ta: "எந்த அலுவலகம்?", en: "Which office?" },
+  department_name: { ta: "எந்த துறை?", en: "Which department?" },
+  establishment_name: { ta: "நிறுவனத்தின் பெயர் என்ன?", en: "Name of the establishment?" },
+  group_name: { ta: "குழுவின் பெயர் என்ன?", en: "Group name?" },
+  society_name: { ta: "சங்கத்தின் பெயர் என்ன?", en: "Society name?" },
+  scheme_name: { ta: "எந்த திட்டம்?", en: "Which scheme?" },
+  encroacher_details: { ta: "ஆக்கிரமிப்பு செய்தவர் யார் (தெரிந்தால்)?", en: "Who encroached, if known?" },
+  udid_number: { ta: "மாற்றுத்திறன் அடையாள (UDID) எண் தெரியுமா?", en: "UDID number, if known?" },
+};
+
+/** Question for a grievance entity: curated when known, mechanical fallback otherwise. */
+export function entityQuestion(entity: string): LetterQuestion {
+  const curated = ENTITY_QUESTIONS[entity];
+  if (curated) return curated;
+  const label = entity.replace(/_/g, " ");
+  return {
+    ta: `"${label}" விவரத்தைச் சொல்லுங்கள். தெரியாவிட்டால் 'தெரியலை' என்று சொல்லுங்கள்.`,
+    en: `Please tell me the ${label}. Say 'I don't know' if unsure.`,
+  };
+}
+
 /** The listen prompt — §7.2, spoken after the user picks "letter" at the greeting. */
 export const LISTEN_PROMPT: LetterQuestion = {
   ta: "என்ன நடந்தது, உங்களுக்கு என்ன வேண்டும் — உங்கள் வார்த்தைகளிலேயே சொல்லுங்கள். நான் கேட்டுக்கொண்டு கடிதம் தயார் செய்கிறேன்.",

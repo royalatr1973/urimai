@@ -13,6 +13,7 @@ export function toGrievanceCategory(row: GrievanceCategoryRow): GrievanceCategor
     issueExamples: row.issueExamples as unknown as string[],
     to: row.toDesignation,
     cc: row.cc as unknown as string[],
+    entitiesRequired: (row.entitiesRequired as unknown as string[]) ?? [],
     version: row.version,
     source: row.source,
     verified: row.verified,
@@ -75,24 +76,26 @@ export interface GrievanceSeedRow {
   issueExamples: string[];
   to: string;
   cc: string[];
+  entitiesRequired: string[];
 }
 
 /** Parse the curator CSV content into seed rows. Throws on structural problems. */
 export function parseGrievanceCsv(content: string): GrievanceSeedRow[] {
   const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
   const header = parseCsvLine(lines[0]!);
-  const expected = ["category", "issue_examples", "to", "cc1", "cc2", "cc3"];
+  const expected = ["category", "issue_examples", "to", "cc1", "cc2", "cc3", "entities_required"];
   if (JSON.stringify(header) !== JSON.stringify(expected)) {
     throw new Error(`grievance CSV header mismatch: ${header.join(",")}`);
   }
   return lines.slice(1).map((line, i) => {
-    const [key, examples, to, cc1, cc2, cc3] = parseCsvLine(line);
+    const [key, examples, to, cc1, cc2, cc3, entities] = parseCsvLine(line);
     if (!key || !to) throw new Error(`grievance CSV row ${i + 2}: missing category or to`);
     return {
       key: key.trim(),
       issueExamples: (examples ?? "").split(";").map((e) => e.trim()).filter((e) => e.length > 0),
       to: normalizeDesignation(to),
       cc: [cc1, cc2, cc3].map((c) => normalizeDesignation(c ?? "")).filter((c) => c.length > 0),
+      entitiesRequired: (entities ?? "").split(";").map((e) => e.trim()).filter((e) => e.length > 0),
     };
   });
 }

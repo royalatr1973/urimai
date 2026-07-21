@@ -37,8 +37,14 @@ export function buildDraftUserPrompt(
   language: Language,
   correction?: CorrectionContext,
   transcript?: string,
+  entities?: Record<string, string>,
 ): string {
   const factLines = FACT_KEYS.filter((k) => typeof facts[k] === "string").map((k) => `${k}: ${facts[k]}`);
+  const entityLines = Object.entries(entities ?? {}).map(([k, v]) => `${k}: ${v}`);
+  const caseDetails =
+    entityLines.length > 0
+      ? `\n\nCase details the user gave (weave these naturally into the body — an officer needs them to act):\n${entityLines.join("\n")}`
+      : "";
   const guidance = type.bodyGuidance ? `\nStyle guidance for this letter type: ${type.bodyGuidance}` : "";
   const said = transcript?.trim()
     ? `\n\nEverything the user said this session, verbatim (their own words — you may draw ANY detail from this; do not lose information that isn't in the structured facts):\n"""\n${transcript.trim()}\n"""`
@@ -50,7 +56,7 @@ export function buildDraftUserPrompt(
 Language: ${langName[language]}${guidance}
 
 Facts stated by the user:
-${factLines.length > 0 ? factLines.join("\n") : "(none)"}${said}${corr}
+${factLines.length > 0 ? factLines.join("\n") : "(none)"}${caseDetails}${said}${corr}
 
 Return the JSON object now.`;
 }

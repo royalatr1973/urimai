@@ -20,6 +20,7 @@ import {
   CHANGED_INTRO,
   CLARIFY_PROMPT,
   confirmTypePrompt,
+  entityQuestion,
   LISTEN_PROMPT,
   NO_CHANGE_NEEDED,
   QUESTIONS,
@@ -52,6 +53,8 @@ export interface DraftRequest {
    * beyond the asked question are never lost.
    */
   transcript?: string;
+  /** Category case data captured from the user (verbatim) — woven into the body. */
+  entities?: Record<string, string>;
 }
 
 /** Resolved To/CC offices for one letter — computed once, reused across revisions. */
@@ -82,6 +85,12 @@ export interface LettersOrchestratorDeps {
     need: { to: boolean; cc: boolean },
     categoryId: string | null,
   ) => Promise<ResolvedAddressee>;
+  /**
+   * Case-data entities the classified grievance category requires (curator column).
+   * Asked one at a time after the story facts; answers captured VERBATIM (no LLM
+   * call — zero latency); "தெரியலை" skips. Optional.
+   */
+  getCategoryEntities?: (categoryId: string) => Promise<string[]>;
   /** Persist one draft revision; returns a draft id for the approval record. */
   logDraft?: (input: { sessionId: string; draft: LetterDraft; revision: number; draftHash: string }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
@@ -101,6 +110,7 @@ export type LetterTurnResult =
   | { kind: "listen"; prompt: LetterQuestion }
   | { kind: "confirm_type"; typeId: string; prompt: LetterQuestion; facts: LetterFacts }
   | { kind: "question"; fact: FactKey; question: LetterQuestion; typeId: string; facts: LetterFacts }
+  | { kind: "entity_question"; entity: string; question: LetterQuestion; typeId: string; facts: LetterFacts }
   | {
       kind: "readback";
       draft: LetterDraft;
@@ -129,8 +139,12 @@ interface SessionState {
   categoryId: string | null;
   facts: LetterFacts;
   pendingFact: FactKey | null;
+  /** The grievance entity just asked about (mutually exclusive with pendingFact). */
+  pendingEntity: string | null;
   /** Facts the user said they don't know — never re-asked; rendered as blanks. */
   skipped: FactKey[];
+  /** Entities the user said they don't know — never re-asked. */
+  skippedEntities: string[];
   revisions: number;
   draft: LetterDraft | null;
   draftId: string | null;
@@ -147,7 +161,9 @@ const EMPTY_STATE: SessionState = {
   categoryId: null,
   facts: { letterTypeId: null, language: null },
   pendingFact: null,
+  pendingEntity: null,
   skipped: [],
+  skippedEntities: [],
   revisions: 0,
   draft: null,
   draftId: null,
@@ -235,6 +251,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       toOffice: state.resolved?.to ?? null,
       ccOffices: state.ccDisabled ? [] : state.resolved?.cc ?? [],
       transcript: state.transcript,
+      entities: state.facts.entities,
     });
     const hash = draftHash(draft);
     const draftId = deps.logDraft
@@ -258,15 +275,41 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     return { kind: "readback", draft, chunks, revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: false };
   }
 
-  /** Gap loop step: ask the next missing required fact, or draft when complete (§7.4–7.5). */
+  /**
+   * Gap loop step (§7.4–7.5), in the confirmed order: STORY facts first, then the
+   * category's case-data ENTITIES, then addressee + copy, then draft.
+   */
   async function collectOrDraft(sessionId: string, state: SessionState, type: LetterType): Promise<LetterTurnResult> {
     const missing = missingRequiredFacts(type, state.facts).filter((f) => !state.skipped.includes(f));
-    if (missing.length === 0) return produceDraft(sessionId, state, type);
+    const LAST: FactKey[] = ["addressee_office", "copy_to"];
+    const story = missing.filter((f) => !LAST.includes(f));
 
-    const fact = missing[0]!;
-    const next: SessionState = { ...state, phase: "collecting", pendingFact: fact };
-    await save(sessionId, next);
-    return { kind: "question", fact, question: QUESTIONS[fact], typeId: type.id, facts: next.facts };
+    const askFact = async (fact: FactKey): Promise<LetterTurnResult> => {
+      const next: SessionState = { ...state, phase: "collecting", pendingFact: fact, pendingEntity: null };
+      await save(sessionId, next);
+      return { kind: "question", fact, question: QUESTIONS[fact], typeId: type.id, facts: next.facts };
+    };
+
+    if (story.length > 0) return askFact(story[0]!);
+
+    // Category case data — what THIS grievance needs (curator column).
+    if (state.categoryId && deps.getCategoryEntities) {
+      const required = await deps.getCategoryEntities(state.categoryId);
+      const missingEntities = required.filter(
+        (e) => !(state.facts.entities?.[e]) && !state.skippedEntities.includes(e),
+      );
+      if (missingEntities.length > 0) {
+        const entity = missingEntities[0]!;
+        const next: SessionState = { ...state, phase: "collecting", pendingFact: null, pendingEntity: entity };
+        await save(sessionId, next);
+        return { kind: "entity_question", entity, question: entityQuestion(entity), typeId: type.id, facts: next.facts };
+      }
+    }
+
+    const last = missing.filter((f) => LAST.includes(f));
+    if (last.length > 0) return askFact(last[0]!);
+
+    return produceDraft(sessionId, state, type);
   }
 
   async function handleTurn(sessionId: string, text: string): Promise<LetterTurnResult> {
@@ -350,6 +393,24 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         facts: mergeFacts(state.facts, extra),
       };
       const type = resolveLetterType(types, typeId);
+      if (!type) throw new Error("letter-type catalogue is empty — cannot proceed");
+      return collectOrDraft(sessionId, next, type);
+    }
+
+    // Entity answer: captured VERBATIM (no LLM call — instant); "தெரியலை" skips.
+    // The reply also lands in the transcript, so the drafter loses nothing.
+    if (state.phase === "collecting" && state.pendingEntity) {
+      const entity = state.pendingEntity;
+      const next: SessionState =
+        isDontKnow(text) || isNoNeed(text)
+          ? { ...state, transcript, skippedEntities: [...state.skippedEntities, entity], pendingEntity: null }
+          : {
+              ...state,
+              transcript,
+              facts: { ...state.facts, entities: { ...(state.facts.entities ?? {}), [entity]: text.trim() } },
+              pendingEntity: null,
+            };
+      const type = resolveLetterType(types, next.typeId);
       if (!type) throw new Error("letter-type catalogue is empty — cannot proceed");
       return collectOrDraft(sessionId, next, type);
     }

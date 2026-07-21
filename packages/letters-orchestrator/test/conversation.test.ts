@@ -161,6 +161,43 @@ describe("full letters conversation", () => {
     expect(r.chunks.join()).toContain("நீக்கிவிட்டேன்"); // removal acknowledged, not "no change"
   });
 
+  it("category entities: asked after the story, captured VERBATIM (no LLM), 'தெரியலை' skips, woven via req.entities", async () => {
+    const f = makeFakeDeps("generic_petition");
+    const seen: Array<Record<string, string> | undefined> = [];
+    const orch = createLettersOrchestrator({
+      ...f.deps,
+      getCategoryEntities: async (categoryId) => (categoryId === "test_category" ? ["survey_number", "village"] : []),
+      draft: async (type, facts, req) => {
+        seen.push(req.entities);
+        return f.deps.draft(type, facts, req);
+      },
+    });
+    const sid = "ent";
+    f.queueExtract({ sender_name: "முருகன்", incident_details: "பட்டா மாறலை", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    await orch.handleTurn(sid, "பட்டா மாத்தி தரலை, வட்டாட்சியர் அலுவலகத்துக்கு கடிதம் எழுதணும், நான் முருகன்");
+    const extractCallsBefore = f.calls.extract.length;
+
+    // After "ஆம்": story facts complete → FIRST entity question (before addressee/copy).
+    const e1 = await orch.handleTurn(sid, "ஆம்");
+    if (e1.kind !== "entity_question") throw new Error(`expected entity_question, got ${e1.kind}`);
+    expect(e1.entity).toBe("survey_number");
+
+    // Verbatim capture — the answer triggers NO extraction call.
+    const e2 = await orch.handleTurn(sid, "214/2B");
+    if (e2.kind !== "entity_question") throw new Error(`expected entity_question, got ${e2.kind}`);
+    expect(e2.entity).toBe("village");
+    expect(f.calls.extract.length).toBe(extractCallsBefore);
+
+    // "தெரியலை" skips the entity; flow proceeds to the copy question.
+    const q = await orch.handleTurn(sid, "தெரியலை");
+    if (q.kind !== "question") throw new Error(`expected question, got ${q.kind}`);
+    expect(q.fact).toBe("copy_to");
+
+    const rb = await orch.handleTurn(sid, "வேண்டாம்");
+    if (rb.kind !== "readback") throw new Error(`expected readback, got ${rb.kind}`);
+    expect(seen.at(-1)).toEqual({ survey_number: "214/2B" }); // entities reached the drafter
+  });
+
   it("copy question: 'வேண்டாம்' means NO copy — nothing searched, நகல் line absent", async () => {
     const f = makeFakeDeps("generic_petition");
     const orch = createLettersOrchestrator(f.deps);

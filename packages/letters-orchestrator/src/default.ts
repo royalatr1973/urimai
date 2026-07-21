@@ -48,6 +48,7 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
         toOffice: req.toOffice,
         ccOffices: req.ccOffices ?? [],
         transcript: req.transcript,
+        entities: req.entities,
       });
       return r.draft;
     },
@@ -84,6 +85,11 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
         if (need.cc && cc.length === 0) cc = found.cc.slice(0, 2);
       }
       return { to, cc };
+    },
+    // Case-data entities the classified category requires (curator column).
+    getCategoryEntities: async (categoryId) => {
+      const categories = await listLatestGrievanceCategories();
+      return categories.find((c) => c.id === categoryId)?.entitiesRequired ?? [];
     },
     logDraft: (input) => saveLetterDraft(input),
     logApproval: (input) => {

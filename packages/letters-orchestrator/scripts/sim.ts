@@ -38,6 +38,9 @@ async function main() {
       case "question":
         console.log(`🤖  [ask ${r.fact}] ${r.question.ta}`);
         break;
+      case "entity_question":
+        console.log(`🤖  [ask entity ${r.entity}] ${r.question.ta}`);
+        break;
       case "readback":
         console.log(`🤖  [readback rev ${r.revisions}, ${r.chunks.length} chunk(s)]`);
         for (const c of r.chunks) console.log("      ┃ " + c.replace(/\n/g, "\n      ┃ "));

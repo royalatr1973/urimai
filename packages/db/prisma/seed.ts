@@ -141,6 +141,7 @@ async function main() {
       issueExamples: g.issueExamples as unknown as object,
       toDesignation: g.to,
       cc: g.cc as unknown as object,
+      entitiesRequired: g.entitiesRequired as unknown as object,
       source: "data/grievance_categories.csv (curator, July 2026)",
       verified: false,
     };

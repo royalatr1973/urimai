@@ -43,6 +43,14 @@ describe("parseGrievanceCsv — the curator's 300 categories", () => {
     expect(fmb.cc).not.toContain("DistrictCollector");
   });
 
+  it("entities_required parses per category (machine-drafted, curator to review)", () => {
+    const heir = rows.find((r) => r.key === "legal_heir_certificate")!;
+    expect(heir.entitiesRequired).toEqual(["deceased_name", "date_of_death", "relationship_to_deceased", "village", "taluk"]);
+    const patta = rows.find((r) => r.key === "patta_transfer")!;
+    expect(patta.entitiesRequired).toContain("survey_number");
+    for (const r of rows) expect(r.entitiesRequired.length, r.key).toBeGreaterThan(0);
+  });
+
   it("escalation chains are ordered nearest-first (To is not repeated in cc)", () => {
     const patta = rows.find((r) => r.key === "patta_transfer")!;
     expect(patta.to).toBe("Tahsildar");

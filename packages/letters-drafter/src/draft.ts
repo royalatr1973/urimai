@@ -49,6 +49,8 @@ export interface DraftOptions {
   ccOffices?: OfficeAddress[];
   /** Everything the user said, verbatim — extra body context + guard allowlist source. */
   transcript?: string;
+  /** Category case data (verbatim user answers) — woven naturally into the body. */
+  entities?: Record<string, string>;
 }
 
 export interface DraftOutcome {
@@ -104,11 +106,17 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
       model: opts.model ?? process.env.ANTHROPIC_MODEL ?? FALLBACK_MODEL,
       max_tokens: 1024,
       system: DRAFT_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildDraftUserPrompt(type, facts, language, opts.correction, opts.transcript) }],
+      messages: [
+        {
+          role: "user",
+          content: buildDraftUserPrompt(type, facts, language, opts.correction, opts.transcript, opts.entities),
+        },
+      ],
     });
     const parsed = parseBodyParagraphs(firstText(msg));
     if (parsed) {
-      const verdict = checkBodyAgainstFacts(parsed, facts, opts.transcript);
+      const userWords = [opts.transcript ?? "", ...Object.values(opts.entities ?? {})].join("\n");
+      const verdict = checkBodyAgainstFacts(parsed, facts, userWords);
       if (verdict.ok) {
         bodyParagraphs = parsed;
         bodySource = "llm";
