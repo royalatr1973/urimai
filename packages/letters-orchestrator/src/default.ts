@@ -4,10 +4,17 @@
  * sinks. The only file that knows the concrete services; orchestrator.ts stays pure.
  */
 import { getRedis } from "@urimai/cache";
-import { listLatestLetterTypes, listLatestOffices, saveLetterApproval, saveLetterDraft } from "@urimai/db";
+import {
+  listLatestGrievanceCategories,
+  listLatestLetterTypes,
+  listLatestOffices,
+  saveLetterApproval,
+  saveLetterDraft,
+} from "@urimai/db";
 import { pickCcOffices, pickToOffice } from "@urimai/letter-types";
 import { classifyLetter, extractLetterFacts, searchAddressee } from "@urimai/letters-extractor";
 import { draftLetter } from "@urimai/letters-drafter";
+import type { OfficeAddress } from "@urimai/types";
 import { createLettersOrchestrator, type SessionStore } from "./orchestrator.js";
 
 export interface DefaultLettersOrchestratorOptions {
@@ -27,7 +34,12 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
   return createLettersOrchestrator({
     store,
     loadTypes: () => listLatestLetterTypes(),
-    classify: (text, types) => classifyLetter(text, types),
+    // Classification also picks the curator grievance category (300-way) — its
+    // escalation chain then decides the To/CC designations below.
+    classify: async (text, types) => {
+      const categories = await listLatestGrievanceCategories();
+      return classifyLetter(text, types, {}, categories.map((c) => c.id));
+    },
     extract: (text, pendingFact) => extractLetterFacts(text, { pendingFact }),
     draft: async (type, facts, req) => {
       const r = await draftLetter(type, facts, {
@@ -39,17 +51,37 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
       });
       return r.draft;
     },
-    // Addressee resolution (user decision, July 2026): the flow ASKS the user for both
-    // the To office and the copy addressee; this runs only for the parts they answered
-    // "தெரியலை" to — web search of official gov.in sources first, curator directory as
-    // the fallback when search finds nothing usable.
-    resolveAddressee: async (type, facts, need) => {
+    // Addressee resolution — runs only for parts the user answered "தெரியலை" to.
+    // Precedence per part: curator grievance-category chain decides the DESIGNATION;
+    // web search (official domains) finds that designation's postal address for the
+    // user's place; failing that, the designation prints with the user's place; the
+    // state-office directory is the last resort.
+    resolveAddressee: async (type, facts, need, categoryId) => {
       if (!need.to && !need.cc) return { to: null, cc: [] };
-      const found = await searchAddressee(type, facts); // never throws; nulls on failure
+      const categories = await listLatestGrievanceCategories();
+      const cat = categoryId ? categories.find((c) => c.id === categoryId) ?? null : null;
+      const found = await searchAddressee(type, facts, {
+        targetTo: cat?.to,
+        targetCc: cat && cat.cc.length > 0 ? [cat.cc[0]!] : undefined,
+      }); // never throws; nulls on failure
       const offices = await listLatestOffices();
-      const to = need.to ? found.to ?? pickToOffice(offices, type.id) : null;
-      const toKey = found.to ? undefined : (pickToOffice(offices, type.id)?.id ?? undefined);
-      const cc = need.cc ? (found.cc.length > 0 ? found.cc : pickCcOffices(offices, type.id, toKey)).slice(0, 2) : [];
+      const place = facts.incident_place ?? facts.sender_address ?? null;
+
+      let to: OfficeAddress | null = null;
+      if (need.to) {
+        to =
+          found.to ??
+          (cat ? { designationTamil: cat.to, addressLines: place ? [place] : ["________"], pincode: null } : null) ??
+          pickToOffice(offices, type.id);
+      }
+
+      let cc: OfficeAddress[] = [];
+      if (need.cc) {
+        if (found.cc.length > 0) cc = found.cc;
+        else if (cat && cat.cc.length > 0) cc = [{ designationTamil: cat.cc[0]!, addressLines: [], pincode: null }];
+        else cc = pickCcOffices(offices, type.id, pickToOffice(offices, type.id)?.id ?? undefined);
+        cc = cc.slice(0, 2);
+      }
       return { to, cc };
     },
     logDraft: (input) => saveLetterDraft(input),

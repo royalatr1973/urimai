@@ -212,6 +212,22 @@ export type Office = {
   notes: string;
 };
 
+/**
+ * A curator-authored grievance category (July 2026, 300 rows): fine-grained
+ * classification vocabulary + the competent-authority escalation chain. DB-backed,
+ * versioned, human-verified like everything else. The chain answers WHO acts on a
+ * matter (To) and who supervises (cc, ordered upward) — designations, not addresses.
+ */
+export type GrievanceCategory = {
+  id: string; // stable key, e.g. "patta_transfer"
+  issueExamples: string[]; // real-world phrasings for classification
+  to: string; // competent first-stop designation, e.g. "Tahsildar"
+  cc: string[]; // supervisory chain above it, nearest first
+  version: number;
+  source: string;
+  verified: boolean;
+};
+
 /** What we learn from the user. All nullable; the gap loop fills required ones. */
 export type LetterFacts = Partial<Record<FactKey, string>> & {
   letterTypeId: string | null; // classified, user-confirmable

@@ -40,6 +40,13 @@ export interface SearchAddresseeOptions {
   client?: SearchClient;
   model?: string;
   apiKey?: string;
+  /**
+   * Curated designations from the grievance-category chain — when set, the search's
+   * job shrinks to finding the postal address of THESE offices for the user's place
+   * (no jurisdiction reasoning needed; the curator already decided who acts).
+   */
+  targetTo?: string;
+  targetCc?: string[];
 }
 
 const FALLBACK_MODEL = "claude-opus-4-8";
@@ -63,7 +70,28 @@ After searching, return ONLY one JSON object, no prose around it:
   "cc": [ up to 2 of the same shape ]
 }`;
 
-export function buildAddresseeSearchPrompt(type: LetterType, facts: LetterFacts): string {
+export function buildAddresseeSearchPrompt(
+  type: LetterType,
+  facts: LetterFacts,
+  targetTo?: string,
+  targetCc?: string[],
+): string {
+  if (targetTo) {
+    const clues = [
+      facts.incident_place ? `Place of the matter: ${facts.incident_place}` : null,
+      facts.sender_address ? `Sender lives at: ${facts.sender_address}` : null,
+    ].filter(Boolean);
+    const cc = targetCc && targetCc.length > 0 ? `\nCC office designation(s) to also locate: ${targetCc.join("; ")}` : "";
+    return `The competent authority is ALREADY DECIDED (curated data) — do NOT re-reason jurisdiction.
+To office designation: ${targetTo}${cc}
+${clues.length > 0 ? clues.join("\n") : "No place given — use the Tamil Nadu state-level office of that designation."}
+
+Find the real postal address of the To office for the citizen's place (the local/district office of that designation), and of the CC office(s) if listed, from official sources, then return the JSON object.`;
+  }
+  return buildJurisdictionPrompt(type, facts);
+}
+
+function buildJurisdictionPrompt(type: LetterType, facts: LetterFacts): string {
   const clues = [
     facts.incident_details ? `What happened (their words): ${facts.incident_details}` : null,
     facts.relief_sought ? `What they want done: ${facts.relief_sought}` : null,
@@ -159,7 +187,7 @@ export async function searchAddressee(
     const model = opts.model ?? process.env.ANTHROPIC_MODEL ?? FALLBACK_MODEL;
 
     const messages: Array<{ role: "user" | "assistant"; content: unknown }> = [
-      { role: "user", content: buildAddresseeSearchPrompt(type, facts) },
+      { role: "user", content: buildAddresseeSearchPrompt(type, facts, opts.targetTo, opts.targetCc) },
     ];
 
     let response = await client.messages.create({

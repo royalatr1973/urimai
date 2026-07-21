@@ -19,21 +19,28 @@ You ONLY classify. You never draft, never judge the merits, never guess beyond t
 Return ONLY a single JSON object — no prose, no markdown, no code fences:
 
 {
-  "letterTypeId": "<one id from the provided list>",
+  "letterTypeId": "<one id from the letter-type list>",
+  "categoryId": "<one id from the grievance-category list, or null>",
   "language": "ta" | "en" | "bilingual" | null
 }
 
 # RULES
-- Choose the single best-fitting letterTypeId from the list in the message. Judge by what the person NEEDS (an outcome), not by keywords alone.
-- If nothing fits clearly, or the need is vague/mixed, use the fallback id marked (FALLBACK) — that is always a safe choice. Never invent an id.
+- letterTypeId: the single best-fitting letter SKELETON. Judge by what the person NEEDS (an outcome), not by keywords alone. If nothing fits clearly, use the fallback id marked (FALLBACK) — always safe. Never invent an id.
+- categoryId: the single most specific grievance category matching their matter (the ids are self-descriptive). null when none fits or no category list is provided. Never invent an id.
 - language: set ONLY if the person explicitly asked for the letter in a language ("write it in English", "ஆங்கிலத்தில் வேணும்", "தமிழில் போதும்"). The language they SPOKE in is NOT a request — leave null unless asked.`;
 
 /** One catalogue line per type, with the fallback marked. Ids come from the DB, never hardcoded. */
-export function buildClassifyUserPrompt(text: string, types: Pick<LetterType, "id" | "nameEnglish" | "nameTamil">[], fallbackId: string): string {
+export function buildClassifyUserPrompt(
+  text: string,
+  types: Pick<LetterType, "id" | "nameEnglish" | "nameTamil">[],
+  fallbackId: string,
+  categoryIds: string[] = [],
+): string {
   const list = types
     .map((t) => `- ${t.id}: ${t.nameEnglish} / ${t.nameTamil}${t.id === fallbackId ? "  (FALLBACK)" : ""}`)
     .join("\n");
-  return `Available letter types:\n${list}\n\nPerson's words:\n"""\n${text}\n"""\n\nReturn the JSON classification object now.`;
+  const cats = categoryIds.length > 0 ? `\n\nGrievance categories (pick the most specific, or null):\n${categoryIds.join(", ")}` : "";
+  return `Available letter types:\n${list}${cats}\n\nPerson's words:\n"""\n${text}\n"""\n\nReturn the JSON classification object now.`;
 }
 
 // --- fact extraction ---------------------------------------------------------

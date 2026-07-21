@@ -149,6 +149,28 @@ model Office {
   @@map("offices")
 }
 
+/// A curator-authored grievance category: classification phrases + the competent-
+/// authority escalation chain (designations). Versioned + verified like schemes.
+model GrievanceCategory {
+  id            String   @id @default(cuid())
+  key           String // stable category key, e.g. "patta_transfer"
+  version       Int      @default(1)
+
+  issueExamples Json // string[] — real-world phrasings
+  toDesignation String // competent first-stop officer designation
+  cc            Json // string[] — supervisory chain, nearest first
+
+  source        String   @default("")
+  verified      Boolean  @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([key, version])
+  @@index([key])
+  @@map("grievance_categories")
+}
+
 /// One drafted letter revision. `draft` holds the structured LetterDraft blocks
 /// (senderBlock, addresseeBlock, subject, bodyParagraphs, ...). Contains PII —
 /// Madal Phase 6 adds encryption at rest + the retention sweep.

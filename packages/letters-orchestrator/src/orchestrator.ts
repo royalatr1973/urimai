@@ -76,7 +76,12 @@ export interface LettersOrchestratorDeps {
    * said "தெரியலை" to (`need`) — a user-provided addressee is never second-guessed,
    * and a declined copy is never searched. Optional; failures tolerated.
    */
-  resolveAddressee?: (type: LetterType, facts: LetterFacts, need: { to: boolean; cc: boolean }) => Promise<ResolvedAddressee>;
+  resolveAddressee?: (
+    type: LetterType,
+    facts: LetterFacts,
+    need: { to: boolean; cc: boolean },
+    categoryId: string | null,
+  ) => Promise<ResolvedAddressee>;
   /** Persist one draft revision; returns a draft id for the approval record. */
   logDraft?: (input: { sessionId: string; draft: LetterDraft; revision: number; draftHash: string }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
@@ -120,6 +125,8 @@ interface SessionState {
   /** Full narration so far — voice notes concatenate across turns (§7.2). */
   transcript: string;
   typeId: string | null;
+  /** Curator grievance category chosen at classification; drives the To/CC chain. */
+  categoryId: string | null;
   facts: LetterFacts;
   pendingFact: FactKey | null;
   /** Facts the user said they don't know — never re-asked; rendered as blanks. */
@@ -137,6 +144,7 @@ const EMPTY_STATE: SessionState = {
   phase: "listening",
   transcript: "",
   typeId: null,
+  categoryId: null,
   facts: { letterTypeId: null, language: null },
   pendingFact: null,
   skipped: [],
@@ -212,7 +220,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       let resolved: ResolvedAddressee = { to: null, cc: [] };
       if ((need.to || need.cc) && deps.resolveAddressee) {
         try {
-          resolved = await deps.resolveAddressee(type, state.facts, need);
+          resolved = await deps.resolveAddressee(type, state.facts, need, state.categoryId);
         } catch {
           /* tolerated — blanks/hints apply */
         }
@@ -388,6 +396,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         phase: "confirming",
         transcript,
         typeId: type.id,
+        categoryId: cls.categoryId ?? null,
         facts: mergeFacts(facts, { letterTypeId: type.id, language: cls.language }),
         pendingFact: null,
       };

@@ -7,7 +7,25 @@ const FB = "generic_petition";
 describe("parseClassification — malformed output never crashes", () => {
   it("parses a clean reply", () => {
     const r = parseClassification('{"letterTypeId":"police_complaint","language":"ta"}', IDS, FB);
-    expect(r).toEqual({ letterTypeId: "police_complaint", language: "ta" });
+    expect(r).toEqual({ letterTypeId: "police_complaint", categoryId: null, language: "ta" });
+  });
+
+  it("keeps a categoryId only when it is in the provided category list", () => {
+    const cats = ["patta_transfer", "pds_short_supply"];
+    const good = parseClassification(
+      '{"letterTypeId":"police_complaint","categoryId":"pds_short_supply","language":null}',
+      IDS,
+      FB,
+      cats,
+    );
+    expect(good.categoryId).toBe("pds_short_supply");
+    const invented = parseClassification(
+      '{"letterTypeId":"police_complaint","categoryId":"moon_land_grab","language":null}',
+      IDS,
+      FB,
+      cats,
+    );
+    expect(invented.categoryId).toBeNull(); // hallucinated category never routes a letter
   });
 
   it("strips code fences and surrounding prose", () => {
@@ -22,13 +40,13 @@ describe("parseClassification — malformed output never crashes", () => {
   it("junk, empty, and non-object replies fall back", () => {
     for (const raw of ["", "no json here", "[1,2,3]", '"a string"', "{broken", "null"]) {
       const r = parseClassification(raw, IDS, FB);
-      expect(r).toEqual({ letterTypeId: FB, language: null });
+      expect(r).toEqual({ letterTypeId: FB, categoryId: null, language: null });
     }
   });
 
   it("an invalid language becomes null without losing the type", () => {
     const r = parseClassification('{"letterTypeId":"rti_request","language":"french"}', IDS, FB);
-    expect(r).toEqual({ letterTypeId: "rti_request", language: null });
+    expect(r).toEqual({ letterTypeId: "rti_request", categoryId: null, language: null });
   });
 });
 

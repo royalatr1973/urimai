@@ -66,7 +66,7 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
     loadTypes: async () => SEED_LETTER_TYPES,
     classify: async (text) => {
       calls.classify.push(text);
-      return { letterTypeId: classifyAs, language: null };
+      return { letterTypeId: classifyAs, categoryId: "test_category", language: null };
     },
     extract: async (text, pendingFact) => {
       calls.extract.push({ text, pendingFact });
@@ -83,7 +83,7 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
           : undefined;
       return fakeDraft(type, facts, note, (req.ccOffices ?? []).map((o) => o.designationTamil), req.toOffice);
     },
-    resolveAddressee: async (_type, _facts, need) => {
+    resolveAddressee: async (_type, _facts, need, _categoryId) => {
       calls.resolve += 1;
       return {
         to: need.to ? { designationTamil: "தேடல்-அலுவலகம்", addressLines: ["Found St", "Chennai"], pincode: "600001" } : null,

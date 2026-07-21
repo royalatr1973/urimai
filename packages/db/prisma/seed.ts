@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { PrismaClient } from "@prisma/client";
 import { SEED_SCHEMES } from "../src/seed-data.js";
 import { SEED_LETTER_TYPES } from "../src/letter-seed-data.js";
+import { parseGrievanceCsv } from "../src/grievance.js";
 
 const prisma = new PrismaClient();
 
@@ -128,6 +129,32 @@ async function main() {
   const officeCount = await prisma.office.count();
   console.log(`\nDone. ${officeCount} office rows in the database.`);
   console.log("Reminder: every office is verified:false — designations and addresses need human sign-off.");
+
+  console.log("\nSeeding grievance categories (curator-authored data/grievance_categories.csv)...\n");
+
+  const grievanceRows = parseGrievanceCsv(
+    readFileSync(fileURLToPath(new URL("../../../data/grievance_categories.csv", import.meta.url)), "utf8"),
+  );
+  const GRIEVANCE_VERSION = 1;
+  for (const g of grievanceRows) {
+    const data = {
+      issueExamples: g.issueExamples as unknown as object,
+      toDesignation: g.to,
+      cc: g.cc as unknown as object,
+      source: "data/grievance_categories.csv (curator, July 2026)",
+      verified: false,
+    };
+    await prisma.grievanceCategory.upsert({
+      where: { key_version: { key: g.key, version: GRIEVANCE_VERSION } },
+      update: data,
+      create: { key: g.key, version: GRIEVANCE_VERSION, ...data },
+    });
+  }
+  const keepCats = grievanceRows.map((g) => g.key);
+  const removedCats = await prisma.grievanceCategory.deleteMany({ where: { key: { notIn: keepCats } } });
+  if (removedCats.count > 0) console.log(`  – removed ${removedCats.count} stale category row(s)`);
+  const catCount = await prisma.grievanceCategory.count();
+  console.log(`Done. ${catCount} grievance-category rows in the database (all verified:false).`);
 }
 
 main()

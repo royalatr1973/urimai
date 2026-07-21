@@ -9,6 +9,8 @@ import { FACT_KEYS, type FactKey, type LetterFacts } from "@urimai/types";
 
 export interface Classification {
   letterTypeId: string;
+  /** Curator grievance category (routing chain source); null when none matched. */
+  categoryId: string | null;
   language: "ta" | "en" | "bilingual" | null;
 }
 
@@ -43,16 +45,23 @@ function extractJsonObject(raw: string): Record<string, unknown> | null {
  * Parse a classification reply. The letterTypeId must be one of `validIds` — anything
  * else (hallucinated id, junk, no JSON) becomes `fallbackId`. Never throws.
  */
-export function parseClassification(raw: string, validIds: string[], fallbackId: string): Classification {
-  const fallback: Classification = { letterTypeId: fallbackId, language: null };
+export function parseClassification(
+  raw: string,
+  validIds: string[],
+  fallbackId: string,
+  validCategoryIds: string[] = [],
+): Classification {
+  const fallback: Classification = { letterTypeId: fallbackId, categoryId: null, language: null };
   const obj = extractJsonObject(raw ?? "");
   if (!obj) return fallback;
 
   const id = typeof obj.letterTypeId === "string" && validIds.includes(obj.letterTypeId)
     ? obj.letterTypeId
     : fallbackId;
+  const categoryId =
+    typeof obj.categoryId === "string" && validCategoryIds.includes(obj.categoryId) ? obj.categoryId : null;
   const lang = languageSchema.safeParse(obj.language);
-  return { letterTypeId: id, language: lang.success ? lang.data : null };
+  return { letterTypeId: id, categoryId, language: lang.success ? lang.data : null };
 }
 
 /**
