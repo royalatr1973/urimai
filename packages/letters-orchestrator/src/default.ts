@@ -52,35 +52,36 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
       return r.draft;
     },
     // Addressee resolution — runs only for parts the user answered "தெரியலை" to.
-    // Precedence per part: curator grievance-category chain decides the DESIGNATION;
-    // web search (official domains) finds that designation's postal address for the
-    // user's place; failing that, the designation prints with the user's place; the
-    // state-office directory is the last resort.
+    // SEED DATA FIRST (live-tester rule, July 2026 — web search was adding ~3 min to
+    // every draft): the curator grievance-category chain names the officer instantly
+    // (printed with the user's place — deliverable anywhere in TN), then the state
+    // office directory. Web search is the RARE last resort, only when neither seed
+    // has anything for this letter at all.
     resolveAddressee: async (type, facts, need, categoryId) => {
       if (!need.to && !need.cc) return { to: null, cc: [] };
       const categories = await listLatestGrievanceCategories();
       const cat = categoryId ? categories.find((c) => c.id === categoryId) ?? null : null;
-      const found = await searchAddressee(type, facts, {
-        targetTo: cat?.to,
-        targetCc: cat && cat.cc.length > 0 ? [cat.cc[0]!] : undefined,
-      }); // never throws; nulls on failure
       const offices = await listLatestOffices();
       const place = facts.incident_place ?? facts.sender_address ?? null;
 
       let to: OfficeAddress | null = null;
       if (need.to) {
-        to =
-          found.to ??
-          (cat ? { designationTamil: cat.to, addressLines: place ? [place] : ["________"], pincode: null } : null) ??
-          pickToOffice(offices, type.id);
+        to = cat
+          ? { designationTamil: cat.to, addressLines: place ? [place] : ["________"], pincode: null }
+          : pickToOffice(offices, type.id);
       }
 
       let cc: OfficeAddress[] = [];
       if (need.cc) {
-        if (found.cc.length > 0) cc = found.cc;
-        else if (cat && cat.cc.length > 0) cc = [{ designationTamil: cat.cc[0]!, addressLines: [], pincode: null }];
-        else cc = pickCcOffices(offices, type.id, pickToOffice(offices, type.id)?.id ?? undefined);
-        cc = cc.slice(0, 2);
+        if (cat && cat.cc.length > 0) cc = [{ designationTamil: cat.cc[0]!, addressLines: [], pincode: null }];
+        else cc = pickCcOffices(offices, type.id, pickToOffice(offices, type.id)?.id ?? undefined).slice(0, 2);
+      }
+
+      // Rare case: no category matched AND the directory has nothing — one web search.
+      if ((need.to && !to) || (need.cc && cc.length === 0)) {
+        const found = await searchAddressee(type, facts, {}); // never throws; nulls on failure
+        if (need.to && !to) to = found.to;
+        if (need.cc && cc.length === 0) cc = found.cc.slice(0, 2);
       }
       return { to, cc };
     },
