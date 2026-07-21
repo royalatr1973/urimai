@@ -31,7 +31,13 @@ const TA_ISO = "ta"; // Bhashini wants ISO-639
 // --- Sarvam (commercial) ------------------------------------------------------
 export class SarvamSpeechProvider implements SpeechProvider {
   readonly name = "sarvam";
-  constructor(private apiKey: string, private base = "https://api.sarvam.ai") {}
+  constructor(
+    private apiKey: string,
+    private base = "https://api.sarvam.ai",
+    /** Speech rate multiplier (bulbul:v2 `pace`): 1.0 normal; <1 slower. Live-tester
+     * request (July 2026): slower voice notes so elderly listeners can follow. */
+    private pace: number | null = null,
+  ) {}
 
   async transcribe(audio: Buffer, opts?: { sourceLang?: string }): Promise<string> {
     // Hand-rolled multipart with an explicit Content-Length: Node fetch's FormData uses
@@ -84,6 +90,7 @@ export class SarvamSpeechProvider implements SpeechProvider {
         // MP3 out: WhatsApp's media API accepts audio/mpeg but NOT audio/wav.
         output_audio_codec: "mp3",
         speech_sample_rate: 22050,
+        ...(this.pace !== null ? { pace: this.pace } : {}),
       }),
     });
     if (!res.ok) throw new Error(`sarvam TTS ${res.status}: ${(await res.text()).slice(0, 200)}`);
@@ -236,7 +243,7 @@ export class FallbackSpeechProvider implements SpeechProvider {
 export interface SpeechConfig {
   provider: "bhashini" | "sarvam";
   bhashini?: { apiKey: string; userId: string; pipelineId: string; configUrl?: string };
-  sarvam?: { apiKey: string };
+  sarvam?: { apiKey: string; pace?: number };
 }
 
 /**
@@ -246,7 +253,9 @@ export interface SpeechConfig {
  */
 export function createSpeechProvider(cfg: SpeechConfig): SpeechProvider {
   const bhashini = cfg.bhashini ? new BhashiniSpeechProvider(cfg.bhashini) : null;
-  const sarvam = cfg.sarvam ? new SarvamSpeechProvider(cfg.sarvam.apiKey) : null;
+  const sarvam = cfg.sarvam
+    ? new SarvamSpeechProvider(cfg.sarvam.apiKey, undefined, cfg.sarvam.pace ?? null)
+    : null;
 
   let primary = cfg.provider === "bhashini" ? bhashini : sarvam;
   let fallback = cfg.provider === "bhashini" ? sarvam : bhashini;

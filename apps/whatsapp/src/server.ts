@@ -31,7 +31,10 @@ function buildHandler(): { handler: AppRouter | null; reason?: string } {
       env.BHASHINI_API_KEY && env.BHASHINI_USER_ID && env.BHASHINI_PIPELINE_ID
         ? { apiKey: env.BHASHINI_API_KEY, userId: env.BHASHINI_USER_ID, pipelineId: env.BHASHINI_PIPELINE_ID }
         : undefined,
-    sarvam: env.SARVAM_API_KEY ? { apiKey: env.SARVAM_API_KEY } : undefined,
+    // Slower voice notes by default (live-tester request) — override via SPEECH_TTS_PACE.
+    sarvam: env.SARVAM_API_KEY
+      ? { apiKey: env.SARVAM_API_KEY, pace: Number(env.SPEECH_TTS_PACE ?? "0.85") }
+      : undefined,
   };
   // Speech is optional: with no ASR/TTS keys the channel runs TEXT-ONLY (Tamil text replies,
   // "please type" nudge for voice notes) and upgrades to voice when keys are configured.

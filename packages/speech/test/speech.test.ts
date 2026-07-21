@@ -52,7 +52,7 @@ describe("Sarvam wire shapes (verified against docs.sarvam.ai, July 2026)", () =
       new Response(JSON.stringify({ audios: [Buffer.from("MP3").toString("base64")] }), { status: 200 }),
     );
     try {
-      const p = new SarvamSpeechProvider("key");
+      const p = new SarvamSpeechProvider("key", undefined, 0.85);
       const out = await p.synthesize("வணக்கம்");
       expect(out.mimeType).toBe("audio/mpeg");
       expect(out.audio.toString()).toBe("MP3");
@@ -64,6 +64,7 @@ describe("Sarvam wire shapes (verified against docs.sarvam.ai, July 2026)", () =
       expect(body.output_audio_codec).toBe("mp3");
       expect(body.text).toBe("வணக்கம்");
       expect(body.target_language_code).toBe("ta-IN");
+      expect(body.pace).toBe(0.85); // slower speech (live-tester request)
     } finally {
       fetchSpy.mockRestore();
     }
