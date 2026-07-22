@@ -30,6 +30,7 @@ function makeRouter() {
     sendAudio: vi.fn(async () => {}),
     sendImage: vi.fn(async () => {}),
     sendDocument: vi.fn(async () => {}),
+    sendInteractiveList: vi.fn(async () => {}),
   };
   const router = createAppRouter({
     routeStore,
@@ -153,6 +154,7 @@ describe("app router (§3 — one webhook, two apps)", () => {
       sendAudio: vi.fn(async () => {}),
       sendImage: vi.fn(async () => {}),
       sendDocument: vi.fn(async () => {}),
+      sendInteractiveList: vi.fn(async () => {}),
     };
     const router = createAppRouter({
       routeStore,

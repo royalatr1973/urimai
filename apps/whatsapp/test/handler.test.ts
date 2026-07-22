@@ -13,6 +13,7 @@ function fakeWhatsApp() {
     sendAudio: vi.fn(async (_to: string, _audio: Buffer, _mime?: string) => {}),
     sendImage: vi.fn(async (_to: string, _image: Buffer, _mime?: string, _caption?: string) => {}),
     sendDocument: vi.fn(async (_to: string, _doc: Buffer, _filename: string, _mime: string, _caption?: string) => {}),
+    sendInteractiveList: vi.fn(async (_to: string, _body: string, _btn: string, _rows: unknown[], _opts?: unknown) => {}),
   } satisfies WhatsAppClient;
 }
 

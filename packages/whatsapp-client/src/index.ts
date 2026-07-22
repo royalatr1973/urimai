@@ -9,6 +9,7 @@ export {
   verifyChallenge,
   verifySignature,
   type InboundMessage,
+  type ListRow,
   type MetaConfig,
   type WhatsAppClient,
 } from "./whatsapp.js";

@@ -41,6 +41,18 @@ describe("parseInbound", () => {
     const m = parseInbound(wrap({ from: "9199", type: "audio", audio: { id: "MEDIA1" } }));
     expect(m).toEqual({ from: "9199", kind: "audio", mediaId: "MEDIA1" });
   });
+  it("surfaces a tapped list row (star rating) as text = the row id", () => {
+    const m = parseInbound(
+      wrap({ from: "9199", type: "interactive", interactive: { type: "list_reply", list_reply: { id: "5", title: "⭐⭐⭐⭐⭐" } } }),
+    );
+    expect(m).toEqual({ from: "9199", kind: "text", text: "5" });
+  });
+  it("surfaces a tapped reply button as text = the button id", () => {
+    const m = parseInbound(
+      wrap({ from: "9199", type: "interactive", interactive: { type: "button_reply", button_reply: { id: "yes", title: "Yes" } } }),
+    );
+    expect(m).toEqual({ from: "9199", kind: "text", text: "yes" });
+  });
   it("returns null for non-message events (e.g. status callbacks)", () => {
     expect(parseInbound({ entry: [{ changes: [{ value: { statuses: [{ id: "x" }] } }] }] })).toBeNull();
     expect(parseInbound({})).toBeNull();

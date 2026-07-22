@@ -10,7 +10,7 @@ import type { EscalationQueue } from "@urimai/escalation";
 import { isHelpRequest } from "@urimai/escalation";
 import type { LetterTurnResult } from "@urimai/letters-orchestrator";
 import type { LetterDraft } from "@urimai/types";
-import type { WhatsAppClient } from "@urimai/whatsapp-client";
+import type { ListRow, WhatsAppClient } from "@urimai/whatsapp-client";
 
 /** The slice of the letters orchestrator the channel uses — reused, not modified. */
 export interface LettersOrchestratorLike {
@@ -33,6 +33,16 @@ export interface MadalHandlerDeps {
   helplineText?: string;
 }
 
+/** The five star-rating rows (best → worst). ids "5".."1" flow straight into the
+ *  letters feedback phase, which reads the digit as the rating. */
+const STAR_ROWS: ListRow[] = [
+  { id: "5", title: "⭐⭐⭐⭐⭐", description: "மிகச் சிறந்தது" },
+  { id: "4", title: "⭐⭐⭐⭐", description: "நன்று" },
+  { id: "3", title: "⭐⭐⭐", description: "பரவாயில்லை" },
+  { id: "2", title: "⭐⭐", description: "மோசம்" },
+  { id: "1", title: "⭐", description: "மிகவும் மோசம்" },
+];
+
 const MSG = {
   handoff: "நேரடி உதவிக்கு, உங்கள் அருகிலுள்ள இ-சேவை மையம் அல்லது வட்டாட்சியர் அலுவலகத்தை அணுகவும்.",
   // Spoken after approval, before the documents arrive.
@@ -40,6 +50,11 @@ const MSG = {
   docCaption:
     "உங்கள் கடிதம் ✅ பிரிண்ட் எடுத்து, கீழே கையொப்பம் அல்லது இடது பெருவிரல் ரேகை வைத்து, சம்பந்தப்பட்ட அலுவலகத்தில் கொடுங்கள். " +
     "(இது AI உதவியுடன் தயாரிக்கப்பட்டது — அனுப்பும் முன் விவரங்களைச் சரிபார்க்கவும்.)",
+  // Spoken nudge alongside the star buttons — the audience is voice-first, so we say
+  // "tap the stars below" rather than leaving a low-literacy user to read it.
+  feedbackNudge: "இந்தச் சேவை உங்களுக்கு எப்படி இருந்தது? கீழே உள்ள நட்சத்திரங்களைத் தட்டி மதிப்பிடுங்கள்.",
+  feedbackButton: "மதிப்பிடுங்கள்",
+  feedbackSection: "நட்சத்திர மதிப்பீடு",
   // Revision cap reached: offer the human path but keep the door open to approve.
   escalateOffer:
     "பல முறை மாற்றியும் சரியாக அமையவில்லை போலிருக்கிறது. நேரடி உதவிக்கு அருகிலுள்ள இ-சேவை மையத்தை அணுகலாம்; அல்லது கடைசி கடிதம் சரியென்றால் 'சரி' என்று சொல்லுங்கள்.",
@@ -92,8 +107,19 @@ export function createMadalHandler(deps: MadalHandlerDeps) {
         return; // NOT complete — awaiting the user's review of the documents
       }
       case "feedback_request":
-        // Documents accepted — ask for one short feedback (session stays open).
-        await deps.speak(from, r.prompt.ta);
+        // Documents accepted — ask for a rating via tappable stars (session stays open).
+        // A short spoken nudge first (voice-first audience), then the 5-star list. A
+        // tapped star returns as text "1".."5" and drives the orchestrator feedback phase;
+        // a typed/spoken reply still works as before. Never let a send failure strand the
+        // letter — the feedback step is optional, so just close-worthy silence is fine.
+        await deps.speak(from, MSG.feedbackNudge);
+        try {
+          await deps.whatsapp.sendInteractiveList(from, r.prompt.ta, MSG.feedbackButton, STAR_ROWS, {
+            sectionTitle: MSG.feedbackSection,
+          });
+        } catch (err) {
+          console.error("[madal] feedback list send failed:", err instanceof Error ? err.message : err);
+        }
         return;
       case "closed":
         // Feedback captured (or done) — close warmly and free the route for the next letter.

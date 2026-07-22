@@ -205,10 +205,11 @@ export const DELIVERED_REVIEW_PROMPT: LetterQuestion = {
   en: "Please read the PDF carefully. If everything is correct, say 'okay' or 'thanks' — the letter is done. If anything should change, tell me what to change and I'll redo and resend it.",
 };
 
-/** Asked once the documents are accepted — one short feedback per letter. */
+/** Asked once the documents are accepted — one short feedback per letter. On WhatsApp
+ *  this is rendered as a tappable 5-star list; the wording stays short to suit that. */
 export const FEEDBACK_PROMPT: LetterQuestion = {
-  ta: "கடிதம் தயார்! ஒரு சிறிய கருத்து கேட்கலாமா — இந்தச் சேவை உங்களுக்கு எப்படி இருந்தது? பயனுள்ளதாக இருந்ததா? உங்கள் கருத்தைச் சொல்லுங்கள் (அல்லது 1 முதல் 5 வரை மதிப்பெண் கொடுங்கள்).",
-  en: "Your letter is ready! One quick question — how was this service for you? Was it helpful? Tell me in your own words (or give a rating from 1 to 5).",
+  ta: "கடிதம் தயார்! இந்தச் சேவை உங்களுக்கு எப்படி இருந்தது? உங்கள் மதிப்பீட்டைத் தேர்ந்தெடுங்கள்:",
+  en: "Your letter is ready! How was this service for you? Please pick your rating:",
 };
 
 /** Warm close after feedback is captured. */

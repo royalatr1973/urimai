@@ -31,6 +31,7 @@ function makeHandler() {
     sendAudio: vi.fn(async () => {}),
     sendImage: vi.fn(async () => {}),
     sendDocument: vi.fn(async (_to: string, _doc: Buffer, _name: string, _mime: string, _cap?: string) => {}),
+    sendInteractiveList: vi.fn(async (_to: string, _body: string, _btn: string, _rows: unknown[], _opts?: unknown) => {}),
   };
   const escalation = { enqueue: vi.fn(async () => {}) };
   const onComplete = vi.fn(async (_from: string) => {});
@@ -85,15 +86,22 @@ describe("Madal WhatsApp renderer", () => {
     expect(onComplete).not.toHaveBeenCalled(); // session stays open for the review
   });
 
-  it("feedback_request speaks the prompt and keeps the session open", async () => {
-    const { handler, orchestrator, spoken, onComplete } = makeHandler();
+  it("feedback_request sends a 5-star tappable list (best→worst) and keeps the session open", async () => {
+    const { handler, orchestrator, whatsapp, spoken, onComplete } = makeHandler();
     orchestrator.handleTurn.mockResolvedValue({
       kind: "feedback_request",
       prompt: { ta: "இந்த சேவை எப்படி இருந்தது?", en: "How was this service?" },
     });
     await handler.handleText("911", "நன்றி");
-    expect(spoken.join()).toContain("எப்படி இருந்தது");
-    expect(onComplete).not.toHaveBeenCalled(); // still open — awaiting the feedback line
+
+    expect(spoken.join()).toContain("நட்சத்திர"); // spoken nudge points at the stars
+    expect(whatsapp.sendInteractiveList).toHaveBeenCalledOnce();
+    const [to, body, , rows] = whatsapp.sendInteractiveList.mock.calls[0]!;
+    expect(to).toBe("911");
+    expect(body).toContain("எப்படி இருந்தது"); // the orchestrator's prompt is the list body
+    expect(rows.map((r: { id: string }) => r.id)).toEqual(["5", "4", "3", "2", "1"]); // digit ids feed the rating
+    expect((rows as { title: string }[])[0]!.title).toBe("⭐⭐⭐⭐⭐");
+    expect(onComplete).not.toHaveBeenCalled(); // still open — awaiting the tap
   });
 
   it("closed speaks the thank-you and frees the route", async () => {

@@ -53,6 +53,15 @@ export function parseInbound(body: unknown): InboundMessage | null {
     if ((msg.type === "audio" || msg.type === "voice") && msg.audio?.id) {
       return { from: msg.from, kind: "audio", mediaId: msg.audio.id };
     }
+    // Interactive replies (tapped list row / reply button) — the row/button id is the
+    // machine payload, so we surface it AS text. A star-rating list uses ids "1".."5",
+    // which the letters feedback phase reads straight through.
+    if (msg.type === "interactive") {
+      const reply = msg.interactive?.list_reply ?? msg.interactive?.button_reply;
+      if (reply && typeof reply.id === "string") {
+        return { from: msg.from, kind: "text", text: reply.id };
+      }
+    }
     return { from: msg.from, kind: "other" };
   } catch {
     return null;
@@ -61,6 +70,13 @@ export function parseInbound(body: unknown): InboundMessage | null {
 
 // --- outbound client ---------------------------------------------------------
 
+/** One tappable row in an interactive list message. title ≤ 24 chars, description ≤ 72. */
+export interface ListRow {
+  id: string;
+  title: string;
+  description?: string;
+}
+
 export interface WhatsAppClient {
   downloadMedia(mediaId: string): Promise<Buffer>;
   sendText(to: string, text: string): Promise<void>;
@@ -68,6 +84,18 @@ export interface WhatsAppClient {
   sendImage(to: string, image: Buffer, mimeType?: string, caption?: string): Promise<void>;
   /** Send a file as a WhatsApp document (shows filename + caption; user can forward/print). */
   sendDocument(to: string, doc: Buffer, filename: string, mimeType: string, caption?: string): Promise<void>;
+  /**
+   * Interactive LIST message: body text + a menu button that opens up to 10 tappable
+   * rows. Used for the star-rating feedback (5 rows) — reply buttons cap at 3, so a
+   * 1–5 scale must be a list. The tapped row's id comes back via parseInbound as text.
+   */
+  sendInteractiveList(
+    to: string,
+    body: string,
+    buttonLabel: string,
+    rows: ListRow[],
+    opts?: { header?: string; footer?: string; sectionTitle?: string },
+  ): Promise<void>;
 }
 
 export interface MetaConfig {
@@ -129,5 +157,32 @@ export class MetaWhatsAppClient implements WhatsAppClient {
   async sendDocument(to: string, doc: Buffer, filename: string, mimeType: string, caption?: string): Promise<void> {
     const id = await this.uploadMedia(doc, mimeType, filename);
     await this.send({ to, type: "document", document: { id, filename, ...(caption ? { caption } : {}) } });
+  }
+  async sendInteractiveList(
+    to: string,
+    body: string,
+    buttonLabel: string,
+    rows: ListRow[],
+    opts: { header?: string; footer?: string; sectionTitle?: string } = {},
+  ): Promise<void> {
+    await this.send({
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+        ...(opts.header ? { header: { type: "text", text: opts.header } } : {}),
+        body: { text: body },
+        ...(opts.footer ? { footer: { text: opts.footer } } : {}),
+        action: {
+          button: buttonLabel,
+          sections: [
+            {
+              ...(opts.sectionTitle ? { title: opts.sectionTitle } : {}),
+              rows: rows.map((r) => ({ id: r.id, title: r.title, ...(r.description ? { description: r.description } : {}) })),
+            },
+          ],
+        },
+      },
+    });
   }
 }
