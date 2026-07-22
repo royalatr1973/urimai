@@ -141,6 +141,47 @@ describe("app router (§3 — one webhook, two apps)", () => {
     expect(routeStore.map.get("madal:route:911")).toBe("urimai");
   });
 
+  it("lettersOnly: never greets or routes to schemes — every message drives letters", async () => {
+    const routeStore = memoryRouteStore();
+    const spoken: string[] = [];
+    const urimai = { handleInbound: vi.fn(async (_m: InboundMessage) => {}) };
+    const madal = { handleText: vi.fn(async () => {}), start: vi.fn(async () => {}), reset: vi.fn(async () => {}) };
+    const escalation = { enqueue: vi.fn(async () => {}) };
+    const whatsapp = {
+      downloadMedia: vi.fn(async () => Buffer.from("")),
+      sendText: vi.fn(async () => {}),
+      sendAudio: vi.fn(async () => {}),
+      sendImage: vi.fn(async () => {}),
+      sendDocument: vi.fn(async () => {}),
+    };
+    const router = createAppRouter({
+      routeStore,
+      toText: async (m) => (m.kind === "text" ? (m.text ?? "") : null),
+      speak: async (_to, t) => void spoken.push(t),
+      urimai,
+      madal,
+      escalation,
+      whatsapp,
+      now: () => "2026-07-22T00:00:00Z",
+      lettersOnly: true,
+    });
+
+    // Fresh bare opener → letters listen prompt, NOT the schemes-or-letter greeting.
+    await router.handleInbound(text("911", "வணக்கம்"));
+    expect(madal.start).toHaveBeenCalledWith("911");
+    expect(spoken.join()).not.toContain("திட்டம்");
+    expect(urimai.handleInbound).not.toHaveBeenCalled();
+
+    // A scheme keyword is ignored as routing — stays in letters.
+    await router.handleInbound(text("911", "எனக்கு பென்ஷன் திட்டம் வேணும்"));
+    expect(madal.handleText).toHaveBeenCalledWith("911", "எனக்கு பென்ஷன் திட்டம் வேணும்");
+    expect(urimai.handleInbound).not.toHaveBeenCalled();
+
+    // help still escalates.
+    await router.handleInbound(text("922", "help"));
+    expect(escalation.enqueue).toHaveBeenCalledOnce();
+  });
+
   it("clearRoute (letter completed) makes the next contact a fresh greeting", async () => {
     const { router, spoken, madal } = makeRouter();
     await router.handleInbound(text("911", "கடிதம்"));

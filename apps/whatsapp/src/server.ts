@@ -93,7 +93,12 @@ function buildHandler(): { handler: AppRouter | null; reason?: string } {
       whatsapp,
       helplineText: env.HELPLINE_TEXT,
       ttlSeconds: 30 * 60,
+      // Testing toggle: LETTERS_ONLY=true disables the schemes flow entirely.
+      lettersOnly: env.LETTERS_ONLY === "true" || env.LETTERS_ONLY === "1",
     });
+    if (env.LETTERS_ONLY === "true" || env.LETTERS_ONLY === "1") {
+      app.log.warn("LETTERS_ONLY mode: schemes (Urimai) flow is DISABLED — every message drives the letters app.");
+    }
     return { handler: router };
   } catch (e) {
     return { handler: null, reason: e instanceof Error ? e.message : String(e) };

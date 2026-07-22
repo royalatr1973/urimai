@@ -65,6 +65,12 @@ export interface RouterDeps {
   now?: () => string;
   /** Route memory TTL — matches the short shared-phone session TTL. */
   ttlSeconds?: number;
+  /**
+   * Letters-only mode (testing toggle, LETTERS_ONLY env): the schemes (Urimai) flow is
+   * switched off — every message drives the letters app, no schemes-or-letter greeting,
+   * no scheme keywords. "help" and reset still work. Flip off to restore both apps.
+   */
+  lettersOnly?: boolean;
 }
 
 const routeKey = (from: string) => `madal:route:${from}`;
@@ -87,6 +93,32 @@ export function createAppRouter(deps: RouterDeps) {
     const text = await deps.toText(msg);
     if (text === null) {
       await deps.whatsapp.sendText(msg.from, msg.kind === "audio" ? MSG.voiceNotReady : MSG.unsupported);
+      return;
+    }
+
+    // --- letters-only mode: schemes flow disabled (testing) ------------------
+    if (deps.lettersOnly) {
+      if (isResetRequest(text)) {
+        await deps.madal.reset(msg.from);
+        await setRoute(msg.from, "madal");
+        await deps.madal.start(msg.from); // fresh letters session + listen prompt
+        return;
+      }
+      if (isHelpRequest(text)) {
+        await deps.escalation.enqueue({ from: msg.from, text, reason: "help_requested", at: now() });
+        if (deps.helplineText) await deps.whatsapp.sendText(msg.from, deps.helplineText);
+        await deps.speak(msg.from, MSG.handoff);
+        return;
+      }
+      if ((await getRoute(msg.from)) === "madal") {
+        await deps.madal.handleText(msg.from, text);
+        return;
+      }
+      // Fresh contact: a bare opener ("வணக்கம்") gets the listen prompt; a message
+      // already carrying the story goes straight into classification.
+      await setRoute(msg.from, "madal");
+      if (isBareIntent(text)) await deps.madal.start(msg.from);
+      else await deps.madal.handleText(msg.from, text);
       return;
     }
 
