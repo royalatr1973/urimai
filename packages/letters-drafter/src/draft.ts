@@ -70,15 +70,23 @@ function firstText(msg: { content: Array<{ type: string; text?: string }> }): st
   return "";
 }
 
-/** Parse {"bodyParagraphs": [...]} tolerantly. null on anything unusable. */
-export function parseBodyParagraphs(raw: string): string[] | null {
-  const tryParse = (s: string): string[] | null => {
+export interface ParsedDraft {
+  subject: string | null;
+  bodyParagraphs: string[] | null;
+}
+
+/** Parse {"subject": "...", "bodyParagraphs": [...]} tolerantly. Fields null when unusable. */
+export function parseDraftOutput(raw: string): ParsedDraft {
+  const tryParse = (s: string): ParsedDraft | null => {
     try {
       const v = JSON.parse(s);
-      const arr = v && typeof v === "object" && !Array.isArray(v) ? (v as { bodyParagraphs?: unknown }).bodyParagraphs : null;
-      if (!Array.isArray(arr)) return null;
-      const out = arr.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim());
-      return out.length > 0 ? out : null;
+      if (!v || typeof v !== "object" || Array.isArray(v)) return null;
+      const o = v as { subject?: unknown; bodyParagraphs?: unknown };
+      const subject = typeof o.subject === "string" && o.subject.trim().length > 0 ? o.subject.trim() : null;
+      const body = Array.isArray(o.bodyParagraphs)
+        ? o.bodyParagraphs.filter((p): p is string => typeof p === "string" && p.trim().length > 0).map((p) => p.trim())
+        : null;
+      return { subject, bodyParagraphs: body && body.length > 0 ? body : null };
     } catch {
       return null;
     }
@@ -87,8 +95,16 @@ export function parseBodyParagraphs(raw: string): string[] | null {
   if (direct) return direct;
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
-  if (start !== -1 && end !== -1 && end > start) return tryParse(raw.slice(start, end + 1));
-  return null;
+  if (start !== -1 && end !== -1 && end > start) {
+    const sliced = tryParse(raw.slice(start, end + 1));
+    if (sliced) return sliced;
+  }
+  return { subject: null, bodyParagraphs: null };
+}
+
+/** Back-compat: just the body paragraphs. */
+export function parseBodyParagraphs(raw: string): string[] | null {
+  return parseDraftOutput(raw).bodyParagraphs;
 }
 
 export async function draftLetter(type: LetterType, facts: LetterFacts, opts: DraftOptions = {}): Promise<DraftOutcome> {
@@ -96,6 +112,7 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
   const date = opts.date ?? formatDate(new Date());
 
   let bodyParagraphs: string[] | null = null;
+  let generatedSubject: string | null = null; // clean, guard-passed LLM subject
   let bodySource: DraftOutcome["bodySource"] = "fallback";
   let violations: string[] = [];
 
@@ -113,17 +130,22 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
         },
       ],
     });
-    const parsed = parseBodyParagraphs(firstText(msg));
-    if (parsed) {
-      const userWords = [opts.transcript ?? "", ...Object.values(opts.entities ?? {})].join("\n");
-      const verdict = checkBodyAgainstFacts(parsed, facts, userWords);
+    const parsed = parseDraftOutput(firstText(msg));
+    const userWords = [opts.transcript ?? "", ...Object.values(opts.entities ?? {})].join("\n");
+    if (parsed.bodyParagraphs) {
+      const verdict = checkBodyAgainstFacts(parsed.bodyParagraphs, facts, userWords);
       if (verdict.ok) {
-        bodyParagraphs = parsed;
+        bodyParagraphs = parsed.bodyParagraphs;
         bodySource = "llm";
       } else {
         violations = verdict.violations;
         console.warn("[letters-drafter] body failed facts-only guard; using fallback:", verdict.violations.join("; "));
       }
+    }
+    // Subject: accept the model's specific subject only if it passes the same guard
+    // (no invented numbers, no citations) — else fall through to the type-name subject.
+    if (parsed.subject && checkBodyAgainstFacts([parsed.subject], facts, userWords).ok) {
+      generatedSubject = parsed.subject;
     }
   } catch (err) {
     console.warn("[letters-drafter] body call failed; using fallback:", err instanceof Error ? err.message : String(err));
@@ -138,7 +160,8 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
       senderBlock: buildSenderBlock(facts),
       date,
       addresseeBlock: buildAddresseeBlock(type, facts, opts.toOffice),
-      subject: buildSubject(type, facts, language),
+      // Subject precedence: user's own subject > model's specific subject > type name.
+      subject: buildSubject(type, facts, language, generatedSubject),
       salutation: buildSalutation(language),
       bodyParagraphs,
       closing: buildClosing(language),

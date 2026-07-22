@@ -88,12 +88,18 @@ export function buildAddresseeBlock(type: LetterType, facts: LetterFacts, toOffi
 }
 
 /**
- * Subject: the user's own subject if stated, else the letter type's name. Legal
- * citations are appended HERE, verbatim from the DB record — the ONLY place a citation
- * can enter a letter (§2.2, §9).
+ * Subject precedence: the user's own stated subject; else a specific subject the
+ * drafting model generated from the letter's context (guard-checked upstream); else,
+ * as a last resort, the letter type's name. Legal citations are appended HERE,
+ * verbatim from the DB record — the ONLY place a citation can enter a letter (§2.2, §9).
  */
-export function buildSubject(type: LetterType, facts: LetterFacts, language: Language): string {
-  const base = facts.subject ?? (language === "en" ? type.nameEnglish : type.nameTamil);
+export function buildSubject(
+  type: LetterType,
+  facts: LetterFacts,
+  language: Language,
+  generatedSubject?: string | null,
+): string {
+  const base = facts.subject ?? generatedSubject ?? (language === "en" ? type.nameEnglish : type.nameTamil);
   const refs = type.legalRefs.map((r) => r.citation).filter((c) => c.trim().length > 0);
   return refs.length > 0 ? `${base} — ${refs.join("; ")}` : base;
 }

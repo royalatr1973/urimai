@@ -23,6 +23,37 @@ describe("deterministic skeleton", () => {
     expect("disclaimer" in draft).toBe(false);
   });
 
+  it("uses the model's SPECIFIC generated subject (not the generic type name)", async () => {
+    const withSubject = reply(
+      '{"subject":"வீட்டில் தங்க நகை திருட்டு குறித்து புகார்","bodyParagraphs":["எங்க வீட்டில் திருட்டு நடந்தது."]}',
+    );
+    const { draft } = await draftLetter(POLICE_TYPE, FACTS, { client: withSubject, date: "19-07-2026" });
+    expect(draft.subject).toBe("வீட்டில் தங்க நகை திருட்டு குறித்து புகார்");
+    expect(draft.subject).not.toBe(POLICE_TYPE.nameTamil); // no longer the generic label
+  });
+
+  it("the user's own stated subject beats the model's generated one", async () => {
+    const withSubject = reply('{"subject":"திருட்டு புகார்","bodyParagraphs":["திருட்டு நடந்தது."]}');
+    const { draft } = await draftLetter(
+      POLICE_TYPE,
+      { ...FACTS, subject: "என் சொந்த தலைப்பு" },
+      { client: withSubject, date: "19-07-2026" },
+    );
+    expect(draft.subject).toBe("என் சொந்த தலைப்பு");
+  });
+
+  it("a generated subject that smuggles a citation is rejected — falls back to the type name", async () => {
+    const bait = reply('{"subject":"Section 379 IPC திருட்டு","bodyParagraphs":["திருட்டு நடந்தது."]}');
+    const { draft } = await draftLetter(POLICE_TYPE, FACTS, { client: bait, date: "19-07-2026" });
+    expect(draft.subject).toBe(POLICE_TYPE.nameTamil); // citation-bearing subject dropped
+  });
+
+  it("RTI: the record's citation is appended to the generated subject", async () => {
+    const withSubject = reply('{"subject":"ஓய்வூதிய விண்ணப்ப நிலை குறித்து","bodyParagraphs":["விவரம் தேவை."]}');
+    const { draft } = await draftLetter(RTI_TYPE, FACTS, { client: withSubject, date: "19-07-2026" });
+    expect(draft.subject).toBe("ஓய்வூதிய விண்ணப்ப நிலை குறித்து — Right to Information Act, 2005 — Section 6(1)");
+  });
+
   it("renders a copy-to line from the user's own words", async () => {
     const { draft } = await draftLetter(
       POLICE_TYPE,
