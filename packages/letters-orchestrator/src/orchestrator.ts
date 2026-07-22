@@ -23,6 +23,9 @@ import {
   entityQuestion,
   LISTEN_PROMPT,
   NO_CHANGE_NEEDED,
+  CLOSED_PROMPT,
+  DELIVERED_REVIEW_PROMPT,
+  POST_DELIVERY_CLARIFY,
   QUESTIONS,
   READBACK_PROMPT,
   REMOVED_NOTE,
@@ -121,14 +124,17 @@ export type LetterTurnResult =
       changedOnly: boolean;
     }
   | { kind: "clarify"; prompt: LetterQuestion; revisions: number }
-  | { kind: "approved"; draft: LetterDraft; draftHash: string; revisions: number; approvalUtterance: string }
+  /** Send the PDF/Word documents, then WAIT for the user to review them (post-delivery). */
+  | { kind: "deliver"; draft: LetterDraft; draftHash: string; revisions: number; prompt: LetterQuestion }
+  /** No correction after review — close the letter warmly. */
+  | { kind: "closed"; draft: LetterDraft; draftHash: string; prompt: LetterQuestion }
   | { kind: "escalate"; reason: "revision_cap"; revisions: number };
 
 const DEFAULT_TTL = 60 * 60 * 24;
 const DEFAULT_REVISION_CAP = 5;
 const sessionKey = (id: string) => `madal:session:${id}`;
 
-type Phase = "listening" | "confirming" | "collecting" | "reviewing";
+type Phase = "listening" | "confirming" | "collecting" | "reviewing" | "delivered";
 
 interface SessionState {
   phase: Phase;
@@ -212,16 +218,17 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
   const save = async (id: string, s: SessionState) => deps.store.set(sessionKey(id), JSON.stringify(s), "EX", ttl);
 
   /**
-   * Produce (and log) a draft, move to reviewing, and build the read-back result.
-   * With `prevDraft` set (a correction), only the CHANGED blocks are read back (§7.6).
+   * Resolve the addressee (once), draft the letter, log the revision, and save the
+   * session in the given phase. Shared by the voice read-back path (→ reviewing) and
+   * the post-delivery correction path (→ delivered).
    */
-  async function produceDraft(
+  async function resolveAndDraft(
     sessionId: string,
     state: SessionState,
     type: LetterType,
+    phase: Phase,
     correction?: { instruction: string; previousBody: string[] },
-    prevDraft?: LetterDraft,
-  ): Promise<LetterTurnResult> {
+  ): Promise<{ state: SessionState; draft: LetterDraft; hash: string }> {
     const language = resolveLanguage(type, state.facts);
 
     // Resolve To/CC ONCE per letter — and ONLY where the user said "தெரியலை"
@@ -257,8 +264,23 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     const draftId = deps.logDraft
       ? await deps.logDraft({ sessionId, draft, revision: state.revisions, draftHash: hash })
       : null;
-    const next: SessionState = { ...state, phase: "reviewing", pendingFact: null, draft, draftId };
+    const next: SessionState = { ...state, phase, pendingFact: null, draft, draftId };
     await save(sessionId, next);
+    return { state: next, draft, hash };
+  }
+
+  /**
+   * Draft, move to reviewing, and build the voice read-back result. With `prevDraft`
+   * set (a correction), only the CHANGED blocks are read back (§7.6).
+   */
+  async function produceDraft(
+    sessionId: string,
+    state: SessionState,
+    type: LetterType,
+    correction?: { instruction: string; previousBody: string[] },
+    prevDraft?: LetterDraft,
+  ): Promise<LetterTurnResult> {
+    const { state: next, draft, hash } = await resolveAndDraft(sessionId, state, type, "reviewing", correction);
 
     if (prevDraft) {
       const changed = chunkChangedReadback(prevDraft, draft);
@@ -273,6 +295,17 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     // Full read-back ends with the SPOKEN disclaimer — told to the user, never printed.
     const chunks = [...chunkReadback(draft), SPOKEN_DISCLAIMER.ta];
     return { kind: "readback", draft, chunks, revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: false };
+  }
+
+  /** Re-draft a corrected letter and hand it back for delivery + post-delivery review. */
+  async function produceDelivery(
+    sessionId: string,
+    state: SessionState,
+    type: LetterType,
+    correction: { instruction: string; previousBody: string[] },
+  ): Promise<LetterTurnResult> {
+    const { state: next, draft, hash } = await resolveAndDraft(sessionId, state, type, "delivered", correction);
+    return { kind: "deliver", draft, draftHash: hash, revisions: next.revisions, prompt: DELIVERED_REVIEW_PROMPT };
   }
 
   /**
@@ -324,6 +357,8 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       const reply = dropCc ? "correction" : classifyReviewReply(text);
 
       if (reply === "approve") {
+        // Content approved by voice → log approval and DELIVER the documents. The
+        // session stays open for a post-delivery review of the actual PDF (below).
         const hash = draftHash(state.draft);
         await deps.logApproval?.({
           sessionId,
@@ -332,15 +367,8 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
           approvalUtterance: text,
           revisions: state.revisions,
         });
-        const result: LetterTurnResult = {
-          kind: "approved",
-          draft: state.draft,
-          draftHash: hash,
-          revisions: state.revisions,
-          approvalUtterance: text,
-        };
-        await deps.store.del(sessionKey(sessionId)); // done — next contact starts fresh
-        return result;
+        await save(sessionId, { ...state, phase: "delivered" });
+        return { kind: "deliver", draft: state.draft, draftHash: hash, revisions: state.revisions, prompt: DELIVERED_REVIEW_PROMPT };
       }
 
       // Neither a clear yes nor a stated change: ask, don't guess (§2.1). No re-draft,
@@ -369,6 +397,50 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         { instruction: text, previousBody: state.draft.bodyParagraphs },
         state.draft,
       );
+    }
+
+    // --- post-delivery review: the user has the PDF in hand -------------------
+    // Wait for corrections. No correction (or a thanks) → close warmly. A correction
+    // → redo the letter and deliver the new PDF, then wait again.
+    if (state.phase === "delivered" && state.draft) {
+      const dropCc = /நகல்|நகலை|copy|cc/i.test(text) && /வேண்டாம்|நீக்க|நீக்கு|இல்லாம|remove|drop/i.test(text);
+      const reply = dropCc ? "correction" : classifyReviewReply(text);
+
+      if (reply === "approve") {
+        // No correction after seeing the documents — the definitive approval; close.
+        const hash = draftHash(state.draft);
+        await deps.logApproval?.({
+          sessionId,
+          draftId: state.draftId,
+          draftHash: hash,
+          approvalUtterance: text,
+          revisions: state.revisions,
+        });
+        await deps.store.del(sessionKey(sessionId)); // done — next contact starts fresh
+        return { kind: "closed", draft: state.draft, draftHash: hash, prompt: CLOSED_PROMPT };
+      }
+
+      if (reply === "unclear") {
+        return { kind: "clarify", prompt: POST_DELIVERY_CLARIFY, revisions: state.revisions };
+      }
+
+      // A correction after delivery — redo and re-deliver (cap still applies).
+      if (state.revisions + 1 > cap) {
+        return { kind: "escalate", reason: "revision_cap", revisions: state.revisions };
+      }
+      const extracted = await deps.extract(text, null);
+      const withNew: SessionState = {
+        ...state,
+        facts: mergeFacts(state.facts, extracted),
+        revisions: state.revisions + 1,
+        ccDisabled: state.ccDisabled || dropCc,
+      };
+      const type = resolveLetterType(types, withNew.typeId);
+      if (!type) throw new Error("letter-type catalogue is empty — cannot draft");
+      return produceDelivery(sessionId, withNew, type, {
+        instruction: text,
+        previousBody: state.draft.bodyParagraphs,
+      });
     }
 
     // --- narration / gap phases ----------------------------------------------

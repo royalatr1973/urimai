@@ -196,6 +196,27 @@ export const SPOKEN_DISCLAIMER: LetterQuestion = {
   en: "A note: this letter was prepared with AI assistance. AI can make mistakes — please verify the details before submitting.",
 };
 
+/**
+ * Spoken AFTER the PDF/Word documents are delivered — the user reviews the actual
+ * letter and either confirms (close) or asks for a change (redo + re-deliver).
+ */
+export const DELIVERED_REVIEW_PROMPT: LetterQuestion = {
+  ta: "கடிதத்தை (PDF) நன்றாகப் படித்துப் பாருங்கள். எல்லாம் சரியாக இருந்தால் 'சரி' அல்லது 'நன்றி' என்று சொல்லுங்கள் — கடிதம் முடிந்தது. ஏதாவது மாற்ற வேண்டுமானால், என்ன மாற்ற வேண்டும் என்று சொல்லுங்கள்; திருத்தி மீண்டும் அனுப்புகிறேன்.",
+  en: "Please read the PDF carefully. If everything is correct, say 'okay' or 'thanks' — the letter is done. If anything should change, tell me what to change and I'll redo and resend it.",
+};
+
+/** Warm close when there are no corrections after the documents were reviewed. */
+export const CLOSED_PROMPT: LetterQuestion = {
+  ta: "உங்கள் கடிதம் தயார்! பிரிண்ட் எடுத்து, கையொப்பம் அல்லது இடது பெருவிரல் ரேகை வைத்து, சம்பந்தப்பட்ட அலுவலகத்தில் கொடுங்கள். வேறு கடிதம் வேண்டுமானால் 'கடிதம்' என்று சொல்லுங்கள். நன்றி!",
+  en: "Your letter is ready! Print it, sign or add your left thumb impression, and submit it to the concerned office. Say 'letter' for another. Thank you!",
+};
+
+/** Unclear reply while awaiting post-delivery review. */
+export const POST_DELIVERY_CLARIFY: LetterQuestion = {
+  ta: "மன்னிக்கவும், சரியாகப் புரியவில்லை. கடிதம் சரியாக இருந்தால் 'சரி' என்று சொல்லுங்கள்; மாற்ற வேண்டுமானால் எதை மாற்ற வேண்டும் என்று சொல்லுங்கள்.",
+  en: "Sorry, I didn't catch that. If the letter is fine, say 'okay'; if not, tell me what to change.",
+};
+
 /** When the review reply is neither a clear yes nor a stated change (§2.1 — never guess). */
 export const CLARIFY_PROMPT: LetterQuestion = {
   ta: "மன்னிக்கவும், சரியாகப் புரியவில்லை. கடிதம் சரியென்றால் 'சரி' என்று மட்டும் சொல்லுங்கள்; மாற்ற வேண்டியிருந்தால், எதை எப்படி மாற்ற வேண்டும் என்று சொல்லுங்கள்.",

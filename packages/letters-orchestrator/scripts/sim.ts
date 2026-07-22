@@ -18,7 +18,8 @@ const turns = [
   "காமராஜர் தெரு, திண்டுக்கல்", // whatever the gap loop asks next (address expected)
   "எங்க தெருவுலதான்", // incident_place if asked
   "சரி, அதுல ஒரு திருத்தம் — மூணு வாரம் இல்ல, ஒரு மாசமா இப்படி இருக்குனு எழுதுங்க", // correction at read-back
-  "சரி அனுப்புங்க", // approval
+  "சரி அனுப்புங்க", // voice approval → DELIVER the PDF, then wait for review
+  "நன்றி", // post-delivery review: no correction → CLOSED
 ];
 
 async function main() {
@@ -46,9 +47,12 @@ async function main() {
         for (const c of r.chunks) console.log("      ┃ " + c.replace(/\n/g, "\n      ┃ "));
         console.log(`🤖  ${r.prompt.ta}`);
         break;
-      case "approved":
-        console.log(`🤖  [approved after ${r.revisions} revision(s)] hash=${r.draftHash.slice(0, 16)}…`);
-        console.log(`      utterance: "${r.approvalUtterance}"`);
+      case "deliver":
+        console.log(`🤖  [DELIVER PDF+docx, rev ${r.revisions}] hash=${r.draftHash.slice(0, 16)}…`);
+        console.log(`🤖  ${r.prompt.ta}`);
+        break;
+      case "closed":
+        console.log(`🤖  [CLOSED — no correction] ${r.prompt.ta}`);
         break;
       case "escalate":
         console.log(`🤖  [escalate after ${r.revisions} revisions]`);
@@ -60,7 +64,7 @@ async function main() {
         console.log(`🤖  ${r.prompt.ta}`);
         break;
     }
-    if (r.kind === "approved") break;
+    if (r.kind === "closed") break;
   }
 
   // Show what was persisted (drafts + approval) for this session.

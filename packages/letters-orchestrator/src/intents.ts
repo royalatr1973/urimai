@@ -106,6 +106,10 @@ const APPROVE_TOKENS = new Set([
   "சூப்பர்",
   "நல்லது",
   "போதும்",
+  "நன்றி", // thanks — a natural "we're done" signal at post-delivery review
+  "நன்றிங்க",
+  "thanks",
+  "thank",
   "அனுப்பு",
   "அனுப்புங்க",
   "அனுப்புங்கள்",

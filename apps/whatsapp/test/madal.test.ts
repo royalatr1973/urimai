@@ -63,41 +63,54 @@ describe("Madal WhatsApp renderer", () => {
     expect(spoken).toEqual(["பகுதி ஒன்று", "பகுதி இரண்டு", "சரியா?"]);
   });
 
-  it("approval delivers .pdf AND .docx as documents with the sign-and-submit caption, then clears the route", async () => {
+  it("deliver sends .pdf AND .docx, asks the user to review them, and does NOT close yet", async () => {
     const { handler, orchestrator, whatsapp, spoken, onComplete } = makeHandler();
     orchestrator.handleTurn.mockResolvedValue({
-      kind: "approved",
+      kind: "deliver",
       draft,
       draftHash: "ab".repeat(32),
       revisions: 1,
-      approvalUtterance: "சரி அனுப்புங்க",
+      prompt: { ta: "PDF-ஐ சரிபார்க்கவும்", en: "Check the PDF" },
     });
     await handler.handleText("911", "சரி அனுப்புங்க");
 
-    expect(spoken.join()).toContain("தயார்");
+    expect(spoken.join()).toContain("தயார்"); // "delivering" spoken
     const docCalls = whatsapp.sendDocument.mock.calls;
     expect(docCalls).toHaveLength(2);
     expect(docCalls[0]![1].toString()).toContain("%PDF");
     expect(docCalls[0]![2]).toBe("madal-letter.pdf");
-    expect(docCalls[0]![3]).toBe("application/pdf");
     expect(docCalls[0]![4]).toContain("பெருவிரல்"); // thumb-impression instruction in the caption
     expect(docCalls[1]![2]).toBe("madal-letter.docx");
+    expect(spoken.join()).toContain("PDF-ஐ சரிபார்க்கவும்"); // review prompt spoken after the docs
+    expect(onComplete).not.toHaveBeenCalled(); // session stays open for the review
+  });
+
+  it("closed speaks the thank-you and frees the route", async () => {
+    const { handler, orchestrator, spoken, onComplete } = makeHandler();
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "closed",
+      draft,
+      draftHash: "ab".repeat(32),
+      prompt: { ta: "உங்கள் கடிதம் தயார்! நன்றி!", en: "Your letter is ready! Thanks!" },
+    });
+    await handler.handleText("911", "நன்றி");
+    expect(spoken.join()).toContain("நன்றி");
     expect(onComplete).toHaveBeenCalledWith("911");
   });
 
-  it("a failed document send keeps the approval — the user is told to retry, route NOT lost silently", async () => {
+  it("a failed document send tells the user to retry rather than silently dropping the letter", async () => {
     const { handler, orchestrator, whatsapp, onComplete } = makeHandler();
     orchestrator.handleTurn.mockResolvedValue({
-      kind: "approved",
+      kind: "deliver",
       draft,
       draftHash: "ab".repeat(32),
       revisions: 0,
-      approvalUtterance: "சரி",
+      prompt: { ta: "சரிபார்க்கவும்", en: "Check it" },
     });
     whatsapp.sendDocument.mockRejectedValueOnce(new Error("upload 500"));
     await handler.handleText("911", "சரி");
     expect(whatsapp.sendText.mock.calls.map((c) => c[1]).join()).toContain("மீண்டும்");
-    expect(onComplete).toHaveBeenCalled(); // session already cleared by the orchestrator; route follows
+    expect(onComplete).not.toHaveBeenCalled(); // stays open so they can retry
   });
 
   it("'உதவி' escalates before any orchestration", async () => {

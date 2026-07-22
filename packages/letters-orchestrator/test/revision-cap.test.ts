@@ -26,9 +26,9 @@ describe("revision cap (§7.6 — cap at N, then offer escalation)", () => {
     if (esc.kind !== "escalate") throw new Error("unreachable");
     expect(esc.revisions).toBe(2);
 
-    // Escalation is an offer, not a dead end — an explicit approval still lands.
+    // Escalation is an offer, not a dead end — an explicit approval still delivers.
     const ok = await orch.handleTurn(sid, "சரி");
-    expect(ok.kind).toBe("approved");
+    expect(ok.kind).toBe("deliver");
     expect(f.approvals).toHaveLength(1);
   });
 });

@@ -115,15 +115,48 @@ describe("full letters conversation", () => {
     expect(t5.draft.bodyParagraphs.join()).toContain("திருத்தம்");
     expect(f.drafts).toHaveLength(2);
 
-    // Turn 6 — explicit approval: hash + utterance logged against the LAST draft id,
-    // and the session is cleared for the next person.
+    // Turn 6 — voice approval: DELIVER the documents, log the approval, and WAIT for a
+    // post-delivery review of the actual PDF. The session stays open (not cleared).
     const t6 = await orch.handleTurn(sid, "சரி அனுப்புங்க");
-    expect(t6.kind).toBe("approved");
-    if (t6.kind !== "approved") throw new Error("unreachable");
+    expect(t6.kind).toBe("deliver");
+    if (t6.kind !== "deliver") throw new Error("unreachable");
     expect(t6.revisions).toBe(1);
-    expect(t6.approvalUtterance).toBe("சரி அனுப்புங்க");
     expect(t6.draftHash).toMatch(/^[0-9a-f]{64}$/);
     expect(f.approvals).toEqual([{ draftId: "draft-2", approvalUtterance: "சரி அனுப்புங்க", revisions: 1 }]);
+    expect(await orch.isNewSession(sid)).toBe(false); // still open — awaiting review
+
+    // Turn 7 — the user reviewed the PDF and it's fine ("நன்றி") → CLOSED, session cleared.
+    const t7 = await orch.handleTurn(sid, "நன்றி");
+    expect(t7.kind).toBe("closed");
+    if (t7.kind !== "closed") throw new Error("unreachable");
+    expect(f.approvals).toHaveLength(2); // final definitive approval also logged
+    expect(await orch.isNewSession(sid)).toBe(true);
+  });
+
+  it("post-delivery correction: redo and re-deliver, then close on the next OK", async () => {
+    const f = makeFakeDeps("generic_petition");
+    const orch = createLettersOrchestrator(f.deps);
+    const sid = "postfix";
+    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    await orch.handleTurn(sid, "வட்டாட்சியருக்கு மனு, என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
+    await orch.handleTurn(sid, "ஆம்"); // → copy_to question
+    await orch.handleTurn(sid, "வேண்டாம்"); // → readback
+    const deliver1 = await orch.handleTurn(sid, "சரி"); // voice approve → deliver
+    expect(deliver1.kind).toBe("deliver");
+    const draftsAfterFirst = f.drafts.length;
+
+    // The user reads the PDF and wants a change → redo + re-deliver, still awaiting review.
+    f.queueExtract({});
+    const deliver2 = await orch.handleTurn(sid, "பேரை லட்சுமி பாய் னு மாத்துங்க");
+    expect(deliver2.kind).toBe("deliver");
+    if (deliver2.kind !== "deliver") throw new Error("unreachable");
+    expect(deliver2.revisions).toBe(1);
+    expect(f.drafts.length).toBe(draftsAfterFirst + 1); // a new revision was drafted
+    expect(await orch.isNewSession(sid)).toBe(false);
+
+    // No more changes → closed.
+    const closed = await orch.handleTurn(sid, "சரி");
+    expect(closed.kind).toBe("closed");
     expect(await orch.isNewSession(sid)).toBe(true);
   });
 
