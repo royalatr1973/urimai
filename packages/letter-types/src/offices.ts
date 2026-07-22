@@ -5,7 +5,23 @@
  *  - CC-offices: the curator's ccFor mapping — "relevant persons for copying"
  *    (live-tester request, July 2026) — capped, deduped against the To office.
  */
-import type { Office } from "@urimai/types";
+import type { LetterFacts, Office } from "@urimai/types";
+
+/**
+ * Jurisdiction locality for an addressee office — drawn from the case-data entities
+ * (the taluk/village/station the matter belongs to). NEVER the sender's own address
+ * (that is the FROM block) and NOT the incident scene like "my house". null when we
+ * have no jurisdiction hint, in which case only the designation is printed.
+ */
+const LOCALITY_KEYS = ["police_station", "taluk", "block", "village", "ward_number", "district"];
+export function officeLocality(facts: LetterFacts): string | null {
+  const ent = facts.entities ?? {};
+  for (const k of LOCALITY_KEYS) {
+    const v = ent[k];
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return null;
+}
 
 /** An address usable on a letter — placeholder entries are never printed. */
 export function hasUsableAddress(office: Office): boolean {

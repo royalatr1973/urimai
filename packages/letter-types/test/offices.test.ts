@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Office } from "@urimai/types";
-import { hasUsableAddress, pickCcOffices, pickToOffice } from "../src/offices.js";
+import { hasUsableAddress, officeLocality, pickCcOffices, pickToOffice } from "../src/offices.js";
 
 const office = (o: Partial<Office>): Office => ({
   id: "x",
@@ -28,6 +28,30 @@ const DIRECTORY: Office[] = [
   office({ id: "shrc", designationTamil: "மனித உரிமை ஆணையம்", handles: ["human_rights_complaint"], ccFor: ["police_complaint"] }),
   office({ id: "scd_placeholder", designationTamil: "மாற்றுத்திறனாளிகள் ஆணையர்", addressLines: ["ADDRESS_TO_VERIFY"], pincode: null, handles: ["scheme_grievance"], ccFor: ["scheme_grievance"] }),
 ];
+
+describe("officeLocality — the To office's jurisdiction, never the sender's address", () => {
+  const facts = (entities: Record<string, string>, extra: Record<string, string> = {}) =>
+    ({ letterTypeId: null, language: null, entities, ...extra }) as never;
+
+  it("picks a jurisdiction entity (station/taluk/village) in priority order", () => {
+    expect(officeLocality(facts({ police_station: "அம்பத்தூர் காவல் நிலையம்", taluk: "அம்பத்தூர்" }))).toBe(
+      "அம்பத்தூர் காவல் நிலையம்",
+    );
+    expect(officeLocality(facts({ taluk: "பொன்னேரி", village: "மின்ஜூர்" }))).toBe("பொன்னேரி");
+    expect(officeLocality(facts({ village: "மின்ஜூர்" }))).toBe("மின்ஜூர்");
+  });
+
+  it("NEVER uses the sender's address (the reported bug)", () => {
+    expect(officeLocality(facts({}, { sender_address: "எண் 5, காந்தி தெரு, சென்னை" }))).toBeNull();
+    // Even with an incident scene present, the sender's address is not the office's.
+    expect(officeLocality(facts({}, { sender_address: "என் வீடு", incident_place: "என் வீடு" }))).toBeNull();
+  });
+
+  it("returns null when there is no jurisdiction hint (designation prints alone)", () => {
+    expect(officeLocality(facts({}))).toBeNull();
+    expect(officeLocality({ letterTypeId: null, language: null } as never)).toBeNull();
+  });
+});
 
 describe("pickToOffice", () => {
   it("picks the office that handles the letter type", () => {

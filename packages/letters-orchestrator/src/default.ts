@@ -11,7 +11,7 @@ import {
   saveLetterApproval,
   saveLetterDraft,
 } from "@urimai/db";
-import { pickCcOffices, pickToOffice } from "@urimai/letter-types";
+import { officeLocality, pickCcOffices, pickToOffice } from "@urimai/letter-types";
 import { classifyLetter, extractLetterFacts, searchAddressee } from "@urimai/letters-extractor";
 import { draftLetter } from "@urimai/letters-drafter";
 import type { OfficeAddress } from "@urimai/types";
@@ -63,12 +63,14 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
       const categories = await listLatestGrievanceCategories();
       const cat = categoryId ? categories.find((c) => c.id === categoryId) ?? null : null;
       const offices = await listLatestOffices();
-      const place = facts.incident_place ?? facts.sender_address ?? null;
+      // The To office's locality is the JURISDICTION the matter belongs to (taluk /
+      // village / station from the case entities) — NEVER the sender's own address.
+      const locality = officeLocality(facts);
 
       let to: OfficeAddress | null = null;
       if (need.to) {
         to = cat
-          ? { designationTamil: cat.to, addressLines: place ? [place] : ["________"], pincode: null }
+          ? { designationTamil: cat.to, addressLines: locality ? [locality] : [], pincode: null }
           : pickToOffice(offices, type.id);
       }
 
