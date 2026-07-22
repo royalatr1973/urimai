@@ -11,4 +11,4 @@ export {
   type SpeechProvider,
   type SpeechConfig,
 } from "./speech.js";
-export { transcodeOggToWav, transcodeWavToOggOpus, patchWavSizes, type Transcoder } from "./transcode.js";
+export { transcodeOggToWav, transcodeWavToOggOpus, patchWavSizes, splitWav, type Transcoder } from "./transcode.js";

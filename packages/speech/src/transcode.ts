@@ -52,6 +52,73 @@ export function patchWavSizes(wav: Buffer): Buffer {
   return wav;
 }
 
+/**
+ * Split a PCM WAV into segments of at most `maxSeconds` each — so voice notes longer
+ * than an ASR provider's per-request cap (Sarvam: 30s) transcribe as several chunks
+ * that the caller stitches back together. Pure PCM math on the canonical 16k-mono WAV
+ * (no re-encode). Returns the WAV unchanged in a single-element array when it fits or
+ * cannot be parsed (the caller just transcribes it as one piece).
+ */
+export function splitWav(wav: Buffer, maxSeconds = 28, maxSegments = 8): Buffer[] {
+  if (wav.length < 44 || wav.toString("ascii", 0, 4) !== "RIFF" || wav.toString("ascii", 8, 12) !== "WAVE") {
+    return [wav];
+  }
+  // Locate fmt fields and the data chunk.
+  let off = 12;
+  let channels = 1;
+  let sampleRate = 16000;
+  let bitsPerSample = 16;
+  let dataStart = -1;
+  let dataLen = 0;
+  while (off + 8 <= wav.length) {
+    const id = wav.toString("ascii", off, off + 4);
+    const size = wav.readUInt32LE(off + 4);
+    const body = off + 8;
+    if (id === "fmt " && body + 16 <= wav.length) {
+      channels = wav.readUInt16LE(body + 2) || 1;
+      sampleRate = wav.readUInt32LE(body + 4) || 16000;
+      bitsPerSample = wav.readUInt16LE(body + 14) || 16;
+    } else if (id === "data") {
+      dataStart = body;
+      dataLen = size === 0xffffffff ? wav.length - body : Math.min(size, wav.length - body);
+      break;
+    }
+    if (size === 0xffffffff) break;
+    off = body + size + (size % 2);
+  }
+  if (dataStart < 0) return [wav];
+
+  const blockAlign = (channels * bitsPerSample) / 8 || 2;
+  let bytesPerSeg = Math.floor(sampleRate * blockAlign * maxSeconds);
+  bytesPerSeg -= bytesPerSeg % blockAlign; // whole sample frames
+  if (bytesPerSeg <= 0 || dataLen <= bytesPerSeg) return [wav];
+
+  const data = wav.subarray(dataStart, dataStart + dataLen);
+  const buildWav = (slice: Buffer): Buffer => {
+    const h = Buffer.alloc(44);
+    h.write("RIFF", 0, "ascii");
+    h.writeUInt32LE(36 + slice.length, 4);
+    h.write("WAVE", 8, "ascii");
+    h.write("fmt ", 12, "ascii");
+    h.writeUInt32LE(16, 16);
+    h.writeUInt16LE(1, 20); // PCM
+    h.writeUInt16LE(channels, 22);
+    h.writeUInt32LE(sampleRate, 24);
+    h.writeUInt32LE(sampleRate * blockAlign, 28);
+    h.writeUInt16LE(blockAlign, 32);
+    h.writeUInt16LE(bitsPerSample, 34);
+    h.write("data", 36, "ascii");
+    h.writeUInt32LE(slice.length, 40);
+    return Buffer.concat([h, slice]);
+  };
+
+  const segments: Buffer[] = [];
+  for (let i = 0; i < data.length && segments.length < maxSegments; i += bytesPerSeg) {
+    segments.push(buildWav(data.subarray(i, Math.min(i + bytesPerSeg, data.length))));
+  }
+  return segments;
+}
+
 /** Inbound: OGG/Opus voice note → WAV (16k mono) for ASR. */
 export const transcodeOggToWav: Transcoder = (input) =>
   runFfmpeg(["-i", "pipe:0", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"], input).then(patchWavSizes);

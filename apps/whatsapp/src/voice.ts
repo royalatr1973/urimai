@@ -6,7 +6,7 @@
  * Mirrors the behavior baked into the Urimai handler; kept separate so that handler
  * (live-tested) stays untouched.
  */
-import type { SpeechProvider, Transcoder } from "@urimai/speech";
+import { splitWav, type SpeechProvider, type Transcoder } from "@urimai/speech";
 import type { InboundMessage, WhatsAppClient } from "@urimai/whatsapp-client";
 
 export interface VoiceDeps {
@@ -46,7 +46,14 @@ export function createTranscriber(deps: VoiceDeps) {
       try {
         const ogg = await deps.whatsapp.downloadMedia(msg.mediaId);
         const wav = await deps.transcode(ogg);
-        return await deps.speech.transcribe(wav, { sourceLang: "ta-IN" });
+        // Long voice notes (people take time telling their story) exceed the ASR
+        // provider's 30s cap — split into ≤28s chunks, transcribe each, stitch together.
+        const chunks = splitWav(wav, 28);
+        const parts: string[] = [];
+        for (const chunk of chunks) {
+          parts.push(await deps.speech.transcribe(chunk, { sourceLang: "ta-IN" }));
+        }
+        return parts.join(" ").replace(/\s+/g, " ").trim();
       } catch (err) {
         console.error("[whatsapp] voice note transcription failed:", err instanceof Error ? err.message : err);
         return null;
