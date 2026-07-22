@@ -125,11 +125,22 @@ describe("full letters conversation", () => {
     expect(f.approvals).toEqual([{ draftId: "draft-2", approvalUtterance: "சரி அனுப்புங்க", revisions: 1 }]);
     expect(await orch.isNewSession(sid)).toBe(false); // still open — awaiting review
 
-    // Turn 7 — the user reviewed the PDF and it's fine ("நன்றி") → CLOSED, session cleared.
+    // Turn 7 — the user reviewed the PDF and it's fine ("நன்றி") → we ask for one line of
+    // feedback before closing. The session stays open to capture it.
     const t7 = await orch.handleTurn(sid, "நன்றி");
-    expect(t7.kind).toBe("closed");
-    if (t7.kind !== "closed") throw new Error("unreachable");
+    expect(t7.kind).toBe("feedback_request");
+    if (t7.kind !== "feedback_request") throw new Error("unreachable");
     expect(f.approvals).toHaveLength(2); // final definitive approval also logged
+    expect(await orch.isNewSession(sid)).toBe(false); // still open — awaiting feedback
+
+    // Turn 8 — the feedback line is captured (sentiment/rating derived), then CLOSED.
+    const t8 = await orch.handleTurn(sid, "ரொம்ப நல்லா இருந்துச்சு, உதவியா இருந்துச்சு");
+    expect(t8.kind).toBe("closed");
+    if (t8.kind !== "closed") throw new Error("unreachable");
+    expect(f.feedback).toHaveLength(1);
+    expect(f.feedback[0]!.sentiment).toBe("positive");
+    expect(f.feedback[0]!.categoryKey).toBe("test_category");
+    expect(f.feedback[0]!.text).toContain("நல்லா");
     expect(await orch.isNewSession(sid)).toBe(true);
   });
 
@@ -154,9 +165,12 @@ describe("full letters conversation", () => {
     expect(f.drafts.length).toBe(draftsAfterFirst + 1); // a new revision was drafted
     expect(await orch.isNewSession(sid)).toBe(false);
 
-    // No more changes → closed.
-    const closed = await orch.handleTurn(sid, "சரி");
+    // No more changes → ask for feedback, then close on the feedback line.
+    const fb = await orch.handleTurn(sid, "சரி");
+    expect(fb.kind).toBe("feedback_request");
+    const closed = await orch.handleTurn(sid, "நல்லா இருந்துச்சு");
     expect(closed.kind).toBe("closed");
+    expect(f.feedback).toHaveLength(1);
     expect(await orch.isNewSession(sid)).toBe(true);
   });
 

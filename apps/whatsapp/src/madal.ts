@@ -91,8 +91,12 @@ export function createMadalHandler(deps: MadalHandlerDeps) {
         }
         return; // NOT complete — awaiting the user's review of the documents
       }
+      case "feedback_request":
+        // Documents accepted — ask for one short feedback (session stays open).
+        await deps.speak(from, r.prompt.ta);
+        return;
       case "closed":
-        // No correction after review — close warmly and free the route for the next letter.
+        // Feedback captured (or done) — close warmly and free the route for the next letter.
         await deps.speak(from, r.prompt.ta);
         await deps.onComplete?.(from);
         return;

@@ -23,6 +23,7 @@ export {
   NO_CHANGE_NEEDED,
   CLOSED_PROMPT,
   DELIVERED_REVIEW_PROMPT,
+  FEEDBACK_PROMPT,
   POST_DELIVERY_CLARIFY,
   QUESTIONS,
   READBACK_PROMPT,
@@ -31,4 +32,5 @@ export {
   entityQuestion,
   type LetterQuestion,
 } from "./questions.js";
+export { classifyFeedback, type FeedbackVerdict } from "./feedback.js";
 export { classifyReviewReply, isApproval, isDontKnow, isNo, isNoNeed, isYes, type ReviewReply } from "./intents.js";

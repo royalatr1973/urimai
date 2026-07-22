@@ -50,3 +50,29 @@ export async function saveLetterApproval(input: ApprovalLogInput): Promise<strin
   });
   return row.id;
 }
+
+export interface FeedbackLogInput {
+  sessionId: string;
+  letterTypeKey: string | null;
+  categoryKey: string | null;
+  revisions: number;
+  sentiment: string;
+  rating: number | null;
+  text: string;
+}
+
+/** Persist one letter's end-of-session user feedback. */
+export async function saveLetterFeedback(input: FeedbackLogInput): Promise<string> {
+  const row = await getPrisma().letterFeedback.create({
+    data: {
+      sessionId: input.sessionId,
+      letterTypeKey: input.letterTypeKey,
+      categoryKey: input.categoryKey,
+      revisions: input.revisions,
+      sentiment: input.sentiment,
+      rating: input.rating,
+      text: input.text,
+    },
+  });
+  return row.id;
+}

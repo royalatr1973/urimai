@@ -10,6 +10,7 @@ import {
   listLatestOffices,
   saveLetterApproval,
   saveLetterDraft,
+  saveLetterFeedback,
 } from "@urimai/db";
 import { officeLocality, pickCcOffices, pickToOffice } from "@urimai/letter-types";
 import { classifyLetter, extractLetterFacts, searchAddressee } from "@urimai/letters-extractor";
@@ -100,6 +101,7 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
       if (!input.draftId) throw new Error("approval without a logged draft id");
       return saveLetterApproval({ ...input, draftId: input.draftId });
     },
+    logFeedback: (input) => saveLetterFeedback(input),
     ttlSeconds: opts.ttlSeconds,
     revisionCap: opts.revisionCap,
   });

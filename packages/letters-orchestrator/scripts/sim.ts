@@ -19,7 +19,8 @@ const turns = [
   "எங்க தெருவுலதான்", // incident_place if asked
   "சரி, அதுல ஒரு திருத்தம் — மூணு வாரம் இல்ல, ஒரு மாசமா இப்படி இருக்குனு எழுதுங்க", // correction at read-back
   "சரி அனுப்புங்க", // voice approval → DELIVER the PDF, then wait for review
-  "நன்றி", // post-delivery review: no correction → CLOSED
+  "நன்றி", // post-delivery review: no correction → FEEDBACK request
+  "ரொம்ப நல்லா இருந்துச்சு, உதவியா இருந்துச்சு", // feedback → CLOSED
 ];
 
 async function main() {
@@ -51,8 +52,11 @@ async function main() {
         console.log(`🤖  [DELIVER PDF+docx, rev ${r.revisions}] hash=${r.draftHash.slice(0, 16)}…`);
         console.log(`🤖  ${r.prompt.ta}`);
         break;
+      case "feedback_request":
+        console.log(`🤖  [FEEDBACK] ${r.prompt.ta}`);
+        break;
       case "closed":
-        console.log(`🤖  [CLOSED — no correction] ${r.prompt.ta}`);
+        console.log(`🤖  [CLOSED] ${r.prompt.ta}`);
         break;
       case "escalate":
         console.log(`🤖  [escalate after ${r.revisions} revisions]`);

@@ -205,10 +205,16 @@ export const DELIVERED_REVIEW_PROMPT: LetterQuestion = {
   en: "Please read the PDF carefully. If everything is correct, say 'okay' or 'thanks' — the letter is done. If anything should change, tell me what to change and I'll redo and resend it.",
 };
 
-/** Warm close when there are no corrections after the documents were reviewed. */
+/** Asked once the documents are accepted — one short feedback per letter. */
+export const FEEDBACK_PROMPT: LetterQuestion = {
+  ta: "கடிதம் தயார்! ஒரு சிறிய கருத்து கேட்கலாமா — இந்தச் சேவை உங்களுக்கு எப்படி இருந்தது? பயனுள்ளதாக இருந்ததா? உங்கள் கருத்தைச் சொல்லுங்கள் (அல்லது 1 முதல் 5 வரை மதிப்பெண் கொடுங்கள்).",
+  en: "Your letter is ready! One quick question — how was this service for you? Was it helpful? Tell me in your own words (or give a rating from 1 to 5).",
+};
+
+/** Warm close after feedback is captured. */
 export const CLOSED_PROMPT: LetterQuestion = {
-  ta: "உங்கள் கடிதம் தயார்! பிரிண்ட் எடுத்து, கையொப்பம் அல்லது இடது பெருவிரல் ரேகை வைத்து, சம்பந்தப்பட்ட அலுவலகத்தில் கொடுங்கள். வேறு கடிதம் வேண்டுமானால் 'கடிதம்' என்று சொல்லுங்கள். நன்றி!",
-  en: "Your letter is ready! Print it, sign or add your left thumb impression, and submit it to the concerned office. Say 'letter' for another. Thank you!",
+  ta: "உங்கள் கருத்துக்கு நன்றி! கடிதத்தைப் பிரிண்ட் எடுத்து, கையொப்பம் அல்லது இடது பெருவிரல் ரேகை வைத்து, சம்பந்தப்பட்ட அலுவலகத்தில் கொடுங்கள். வேறு கடிதம் வேண்டுமானால் 'கடிதம்' என்று சொல்லுங்கள். நன்றி!",
+  en: "Thank you for your feedback! Print the letter, sign or add your left thumb impression, and submit it to the concerned office. Say 'letter' for another. Thank you!",
 };
 
 /** Unclear reply while awaiting post-delivery review. */

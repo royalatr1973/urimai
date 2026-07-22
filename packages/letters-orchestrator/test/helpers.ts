@@ -49,6 +49,7 @@ export interface FakeDeps {
   calls: { classify: string[]; extract: Array<{ text: string; pendingFact: string | null }>; draft: number; resolve: number };
   drafts: Array<{ revision: number; draftHash: string }>;
   approvals: Array<{ draftId: string | null; approvalUtterance: string; revisions: number }>;
+  feedback: Array<{ sentiment: string; rating: number | null; text: string; categoryKey: string | null }>;
   /** Script the next extraction result(s); consumed in order, then empty facts. */
   queueExtract: (...facts: Partial<LetterFacts>[]) => void;
 }
@@ -59,6 +60,7 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
   const calls: FakeDeps["calls"] = { classify: [], extract: [], draft: 0, resolve: 0 };
   const drafts: FakeDeps["drafts"] = [];
   const approvals: FakeDeps["approvals"] = [];
+  const feedback: FakeDeps["feedback"] = [];
   let draftSeq = 0;
 
   const deps: LettersOrchestratorDeps = {
@@ -97,7 +99,10 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
     logApproval: async (input) => {
       approvals.push({ draftId: input.draftId, approvalUtterance: input.approvalUtterance, revisions: input.revisions });
     },
+    logFeedback: async (input) => {
+      feedback.push({ sentiment: input.sentiment, rating: input.rating, text: input.text, categoryKey: input.categoryKey });
+    },
   };
 
-  return { deps, store, calls, drafts, approvals, queueExtract: (...f) => extractQueue.push(...f) };
+  return { deps, store, calls, drafts, approvals, feedback, queueExtract: (...f) => extractQueue.push(...f) };
 }

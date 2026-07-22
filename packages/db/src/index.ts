@@ -50,7 +50,14 @@ export async function listLatestSchemes(): Promise<Scheme[]> {
 export { SEED_SCHEMES } from "./seed-data.js";
 export { SEED_LETTER_TYPES } from "./letter-seed-data.js";
 export { toLetterType, listLatestLetterTypes, type LetterTypeRow } from "./letter-types.js";
-export { saveLetterDraft, saveLetterApproval, type DraftLogInput, type ApprovalLogInput } from "./letters.js";
+export {
+  saveLetterDraft,
+  saveLetterApproval,
+  saveLetterFeedback,
+  type DraftLogInput,
+  type ApprovalLogInput,
+  type FeedbackLogInput,
+} from "./letters.js";
 export { toOffice, listLatestOffices, type OfficeRow } from "./offices.js";
 export {
   listLatestGrievanceCategories,

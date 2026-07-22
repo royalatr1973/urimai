@@ -85,15 +85,24 @@ describe("Madal WhatsApp renderer", () => {
     expect(onComplete).not.toHaveBeenCalled(); // session stays open for the review
   });
 
+  it("feedback_request speaks the prompt and keeps the session open", async () => {
+    const { handler, orchestrator, spoken, onComplete } = makeHandler();
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "feedback_request",
+      prompt: { ta: "இந்த சேவை எப்படி இருந்தது?", en: "How was this service?" },
+    });
+    await handler.handleText("911", "நன்றி");
+    expect(spoken.join()).toContain("எப்படி இருந்தது");
+    expect(onComplete).not.toHaveBeenCalled(); // still open — awaiting the feedback line
+  });
+
   it("closed speaks the thank-you and frees the route", async () => {
     const { handler, orchestrator, spoken, onComplete } = makeHandler();
     orchestrator.handleTurn.mockResolvedValue({
       kind: "closed",
-      draft,
-      draftHash: "ab".repeat(32),
-      prompt: { ta: "உங்கள் கடிதம் தயார்! நன்றி!", en: "Your letter is ready! Thanks!" },
+      prompt: { ta: "உங்கள் கருத்துக்கு நன்றி!", en: "Thanks for your feedback!" },
     });
-    await handler.handleText("911", "நன்றி");
+    await handler.handleText("911", "நல்லா இருந்துச்சு");
     expect(spoken.join()).toContain("நன்றி");
     expect(onComplete).toHaveBeenCalledWith("911");
   });

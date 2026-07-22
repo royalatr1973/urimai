@@ -207,6 +207,25 @@ model LetterApproval {
   @@map("letter_approvals")
 }
 
+/// Per-letter user feedback (July 2026) — one row per completed letter. The raw text
+/// is what the user said/typed ("how did you feel?"); sentiment/rating are a coarse
+/// bucket for aggregation. No PII (no name/address) — just the reaction + letter context.
+model LetterFeedback {
+  id            String   @id @default(cuid())
+  sessionId     String
+  letterTypeKey String?
+  categoryKey   String?
+  revisions     Int      @default(0)
+  sentiment     String // "positive" | "neutral" | "negative"
+  rating        Int? // 1–5 when the user gave a number
+  text          String // the user's verbatim feedback
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([sentiment])
+  @@map("letter_feedback")
+}
+
 /// Human-safety-net escalation ticket. Contact + message are encrypted (PII).
 model Escalation {
   id         String    @id @default(cuid())

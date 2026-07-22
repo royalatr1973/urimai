@@ -14,6 +14,7 @@ import type { FactKey, LetterDraft, LetterFacts, LetterType, OfficeAddress } fro
 import { missingRequiredFacts, resolveLanguage, resolveLetterType } from "@urimai/letter-types";
 import { draftHash } from "@urimai/docgen";
 import type { Classification } from "@urimai/letters-extractor";
+import { classifyFeedback } from "./feedback.js";
 import { classifyReviewReply, isDontKnow, isNo, isNoNeed, isYes } from "./intents.js";
 import { chunkChangedReadback, chunkReadback } from "./readback.js";
 import {
@@ -25,6 +26,7 @@ import {
   NO_CHANGE_NEEDED,
   CLOSED_PROMPT,
   DELIVERED_REVIEW_PROMPT,
+  FEEDBACK_PROMPT,
   POST_DELIVERY_CLARIFY,
   QUESTIONS,
   READBACK_PROMPT,
@@ -104,6 +106,16 @@ export interface LettersOrchestratorDeps {
     approvalUtterance: string;
     revisions: number;
   }) => Promise<unknown>;
+  /** Persist the end-of-letter feedback ("how did you feel?"). Optional. */
+  logFeedback?: (input: {
+    sessionId: string;
+    letterTypeKey: string | null;
+    categoryKey: string | null;
+    revisions: number;
+    sentiment: string;
+    rating: number | null;
+    text: string;
+  }) => Promise<unknown>;
   ttlSeconds?: number;
   /** Correction rounds before offering a human (§7.6). */
   revisionCap?: number;
@@ -126,15 +138,17 @@ export type LetterTurnResult =
   | { kind: "clarify"; prompt: LetterQuestion; revisions: number }
   /** Send the PDF/Word documents, then WAIT for the user to review them (post-delivery). */
   | { kind: "deliver"; draft: LetterDraft; draftHash: string; revisions: number; prompt: LetterQuestion }
-  /** No correction after review — close the letter warmly. */
-  | { kind: "closed"; draft: LetterDraft; draftHash: string; prompt: LetterQuestion }
+  /** Documents accepted — ask the user for feedback before closing. */
+  | { kind: "feedback_request"; prompt: LetterQuestion }
+  /** Feedback captured (or the letter is done) — close warmly. */
+  | { kind: "closed"; prompt: LetterQuestion }
   | { kind: "escalate"; reason: "revision_cap"; revisions: number };
 
 const DEFAULT_TTL = 60 * 60 * 24;
 const DEFAULT_REVISION_CAP = 5;
 const sessionKey = (id: string) => `madal:session:${id}`;
 
-type Phase = "listening" | "confirming" | "collecting" | "reviewing" | "delivered";
+type Phase = "listening" | "confirming" | "collecting" | "reviewing" | "delivered" | "feedback";
 
 interface SessionState {
   phase: Phase;
@@ -407,7 +421,8 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       const reply = dropCc ? "correction" : classifyReviewReply(text);
 
       if (reply === "approve") {
-        // No correction after seeing the documents — the definitive approval; close.
+        // No correction after seeing the documents — the definitive approval. Log it,
+        // then ask for feedback before closing (one feedback per letter).
         const hash = draftHash(state.draft);
         await deps.logApproval?.({
           sessionId,
@@ -416,8 +431,8 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
           approvalUtterance: text,
           revisions: state.revisions,
         });
-        await deps.store.del(sessionKey(sessionId)); // done — next contact starts fresh
-        return { kind: "closed", draft: state.draft, draftHash: hash, prompt: CLOSED_PROMPT };
+        await save(sessionId, { ...state, phase: "feedback" });
+        return { kind: "feedback_request", prompt: FEEDBACK_PROMPT };
       }
 
       if (reply === "unclear") {
@@ -441,6 +456,22 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         instruction: text,
         previousBody: state.draft.bodyParagraphs,
       });
+    }
+
+    // --- feedback: capture the user's reaction, then close (one per letter) ---
+    if (state.phase === "feedback") {
+      const { sentiment, rating } = classifyFeedback(text);
+      await deps.logFeedback?.({
+        sessionId,
+        letterTypeKey: state.typeId,
+        categoryKey: state.categoryId,
+        revisions: state.revisions,
+        sentiment,
+        rating,
+        text: text.trim(),
+      });
+      await deps.store.del(sessionKey(sessionId)); // done — next contact starts fresh
+      return { kind: "closed", prompt: CLOSED_PROMPT };
     }
 
     // --- narration / gap phases ----------------------------------------------
