@@ -6,7 +6,7 @@
  * Mirrors the behavior baked into the Urimai handler; kept separate so that handler
  * (live-tested) stays untouched.
  */
-import { splitWav, type SpeechProvider, type Transcoder } from "@urimai/speech";
+import { splitWav, wordsToDigits, type SpeechProvider, type Transcoder } from "@urimai/speech";
 import type { InboundMessage, WhatsAppClient } from "@urimai/whatsapp-client";
 
 export interface VoiceDeps {
@@ -53,7 +53,9 @@ export function createTranscriber(deps: VoiceDeps) {
         for (const chunk of chunks) {
           parts.push(await deps.speech.transcribe(chunk, { sourceLang: "ta-IN" }));
         }
-        return parts.join(" ").replace(/\s+/g, " ").trim();
+        // ASR writes spoken numbers as words ("எழுபத்தைந்து"); a door/survey/phone
+        // number on a letter must be digits — normalize before anything downstream.
+        return wordsToDigits(parts.join(" ").replace(/\s+/g, " ").trim());
       } catch (err) {
         console.error("[whatsapp] voice note transcription failed:", err instanceof Error ? err.message : err);
         return null;

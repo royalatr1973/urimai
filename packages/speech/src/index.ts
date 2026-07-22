@@ -12,3 +12,4 @@ export {
   type SpeechConfig,
 } from "./speech.js";
 export { transcodeOggToWav, transcodeWavToOggOpus, patchWavSizes, splitWav, type Transcoder } from "./transcode.js";
+export { wordsToDigits } from "./numwords.js";
