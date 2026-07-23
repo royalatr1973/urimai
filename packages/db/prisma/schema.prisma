@@ -179,6 +179,7 @@ model LetterDraft {
   id            String           @id @default(cuid())
   sessionId     String
   letterTypeKey String
+  categoryKey   String? // grievance category (300-way) chosen at classify; null = fell to generic
   typeVersion   Int
   revision      Int              @default(0)
   language      String // "ta" | "en" | "bilingual"

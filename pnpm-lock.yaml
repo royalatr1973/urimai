@@ -23,6 +23,9 @@ importers:
       '@urimai/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@urimai/docgen':
+        specifier: workspace:*
+        version: link:../../packages/docgen
       '@urimai/extractor':
         specifier: workspace:*
         version: link:../../packages/extractor

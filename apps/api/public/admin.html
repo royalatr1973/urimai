@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>Madal — admin</title>
+<style>
+  :root{
+    --bg:#f5f4ef; --card:#fbfaf6; --ink:#1c211f; --soft:#5c635e; --line:#dfdcd2;
+    --teal:#0e6b60; --teal-bg:#dcebe8; --clay:#9c5a2c; --danger:#b23b3b; --danger-bg:#f4e0dd;
+    --tamil:"Noto Sans Tamil","Nirmala UI","Latha","Tamil Sangam MN",sans-serif;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;font-size:15px}
+  a{color:var(--teal)}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:14px 22px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .brand{font-weight:600;font-size:16px}
+  .brand small{font-weight:400;color:var(--soft);margin-left:8px;font-size:13px}
+  .btn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--ink);
+    padding:7px 12px;border-radius:8px;cursor:pointer}
+  .btn:hover{border-color:var(--teal);color:var(--teal)}
+  .btn-primary{background:var(--teal);border-color:var(--teal);color:#fff}
+  .btn-primary:hover{color:#fff;opacity:.92}
+  .wrap{max-width:1080px;margin:0 auto;padding:22px}
+  .muted{color:var(--soft)}
+  .mono{font-family:var(--mono);font-size:12.5px}
+  /* login */
+  .login{max-width:380px;margin:12vh auto;background:var(--card);border:1px solid var(--line);
+    border-radius:14px;padding:28px}
+  .login h1{font-size:19px;margin:0 0 6px}
+  .login p{margin:0 0 18px;color:var(--soft);font-size:14px}
+  .login input{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .login .btn-primary{width:100%;margin-top:12px;padding:10px}
+  .err{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px}
+  /* tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:8px}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .tile .k{font-size:12px;color:var(--soft);text-transform:uppercase;letter-spacing:.05em}
+  .tile .v{font-size:26px;font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+  .tile .sub{font-size:12.5px;color:var(--soft);margin-top:2px}
+  .tile.alert{border-color:var(--danger);background:var(--danger-bg)}
+  .tile.alert .v{color:var(--danger)}
+  .section-h{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--soft);
+    margin:26px 0 12px;display:flex;align-items:center;gap:10px}
+  .section-h::after{content:"";flex:1;height:1px;background:var(--line)}
+  /* table */
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:top}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--soft);font-weight:500;background:var(--bg)}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:var(--teal-bg)}
+  tbody tr:last-child td{border-bottom:none}
+  .pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:20px;border:1px solid var(--line)}
+  .pill.pos{background:var(--teal-bg);border-color:var(--teal);color:var(--teal)}
+  .pill.neg{background:var(--danger-bg);border-color:var(--danger);color:var(--danger)}
+  .pill.warn{background:#f3ead6;border-color:var(--clay);color:var(--clay)}
+  .stars{color:var(--clay);letter-spacing:1px}
+  .nocat{color:var(--clay);font-style:italic}
+  /* detail drawer */
+  .scrim{position:fixed;inset:0;background:rgba(20,22,20,.4);display:none;z-index:20}
+  .scrim.open{display:block}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(560px,94vw);background:var(--bg);
+    border-left:1px solid var(--line);z-index:21;transform:translateX(100%);transition:transform .18s;
+    display:flex;flex-direction:column}
+  .drawer.open{transform:translateX(0)}
+  .drawer header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;
+    background:var(--card);border-bottom:1px solid var(--line)}
+  .drawer header h2{font-size:16px;margin:0}
+  .drawer .body{padding:20px;overflow-y:auto}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;margin-bottom:18px}
+  .meta div{font-size:13px}
+  .meta .k{color:var(--soft);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+  .letter{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;
+    font-family:var(--tamil);font-size:14.5px;line-height:1.7;white-space:pre-wrap}
+  .letter .subj{font-weight:600}
+  .fb{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--teal);
+    border-radius:0 10px 10px 0;padding:12px 14px;margin-top:12px;font-family:var(--tamil)}
+  .row-actions{display:flex;gap:10px;margin:16px 0}
+  .empty{padding:40px;text-align:center;color:var(--soft)}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login">
+  <h1>Madal admin</h1>
+  <p>Enter the operator token to view letters and dashboard.</p>
+  <input id="token" type="password" placeholder="Operator token" autocomplete="off" />
+  <button class="btn btn-primary" onclick="login()">Sign in</button>
+  <div id="loginErr" class="err"></div>
+</div>
+
+<div id="appView" class="hidden">
+  <div class="topbar">
+    <div class="brand">Madal admin <small>letter drafter · operator view</small></div>
+    <div>
+      <button class="btn" onclick="refresh()">Refresh</button>
+      <button class="btn" onclick="logout()">Sign out</button>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="section-h">Dashboard — what needs attention</div>
+    <div id="tiles" class="tiles"></div>
+    <div class="section-h">Letters — newest first</div>
+    <div id="listWrap"></div>
+  </div>
+</div>
+
+<div id="scrim" class="scrim" onclick="closeDrawer()"></div>
+<aside id="drawer" class="drawer" aria-label="Letter detail">
+  <header><h2 id="dTitle">Letter</h2><button class="btn" onclick="closeDrawer()">Close</button></header>
+  <div class="body" id="dBody"></div>
+</aside>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let TOKEN = sessionStorage.getItem("madal_admin_token") || "";
+
+function authHeaders(){ return { Authorization: "Bearer " + TOKEN }; }
+function esc(s){ return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function maskPhone(sid){
+  const raw = String(sid).replace(/^wa:/, "");
+  if(raw.length <= 6) return sid;
+  return "…" + raw.slice(-4);
+}
+function fmtDate(d){ if(!d) return "—"; const t = new Date(d); return t.toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"}); }
+function stars(n){ return n ? "★".repeat(n) + "☆".repeat(5-n) : ""; }
+
+async function api(path){
+  const res = await fetch(path, { headers: authHeaders() });
+  if(res.status === 401 || res.status === 503){ logout("Session expired or token rejected — sign in again."); throw new Error("auth"); }
+  if(!res.ok) throw new Error("HTTP " + res.status);
+  return res.json();
+}
+
+async function login(){
+  TOKEN = $("token").value.trim();
+  if(!TOKEN){ $("loginErr").textContent = "Enter a token."; return; }
+  $("loginErr").textContent = "Checking…";
+  try{
+    await api("/api/admin/summary");
+    sessionStorage.setItem("madal_admin_token", TOKEN);
+    $("loginErr").textContent = "";
+    showApp();
+  }catch(e){
+    if(e.message === "auth") return;
+    $("loginErr").textContent = "Could not sign in. Check the token and that the API is running.";
+  }
+}
+function logout(msg){
+  sessionStorage.removeItem("madal_admin_token"); TOKEN = "";
+  $("appView").classList.add("hidden"); $("loginView").classList.remove("hidden");
+  $("loginErr").textContent = msg || ""; $("token").value = "";
+}
+function showApp(){
+  $("loginView").classList.add("hidden"); $("appView").classList.remove("hidden");
+  refresh();
+}
+
+async function refresh(){
+  try{
+    const [summary, list] = await Promise.all([ api("/api/admin/summary"), api("/api/admin/letters?limit=100") ]);
+    renderTiles(summary); renderList(list.letters, list.total);
+  }catch(e){ if(e.message !== "auth") alert("Load failed: " + e.message); }
+}
+
+function tile(k, v, sub, cls){
+  return `<div class="tile ${cls||""}"><div class="k">${esc(k)}</div><div class="v">${esc(v)}</div>${sub?`<div class="sub">${esc(sub)}</div>`:""}</div>`;
+}
+function renderTiles(s){
+  const avg = s.feedback.avgRating != null ? s.feedback.avgRating.toFixed(1) : "—";
+  const t = [];
+  t.push(tile("Delivered", s.deliveredTotal, s.deliveredLast7d + " in last 7 days"));
+  t.push(tile("Avg rating", avg, s.feedback.count + " rated · " + s.feedback.negative + " negative"));
+  t.push(tile("Waiting for a human", s.pendingEscalations, "help / cap escalations", s.pendingEscalations>0?"alert":""));
+  t.push(tile("Negative (7d)", s.negativeLast7d, "recent unhappy feedback", s.negativeLast7d>0?"alert":""));
+  t.push(tile("High-revision", s.highRevision, "took 3+ redraws"));
+  t.push(tile("No category", s.unmatchedCategory, "fell to generic — taxonomy gap", s.unmatchedCategory>0?"alert":""));
+  $("tiles").innerHTML = t.join("");
+}
+
+function sentimentPill(row){
+  if(row.rating) return `<span class="stars">${stars(row.rating)}</span>`;
+  if(!row.sentiment) return `<span class="muted">—</span>`;
+  const cls = row.sentiment==="positive"?"pos":row.sentiment==="negative"?"neg":"";
+  return `<span class="pill ${cls}">${esc(row.sentiment)}</span>`;
+}
+function renderList(rows, total){
+  if(!rows.length){ $("listWrap").innerHTML = `<div class="empty">No delivered letters yet.</div>`; return; }
+  const body = rows.map(r => `
+    <tr onclick='openLetter(${JSON.stringify(r.sessionId)})'>
+      <td>${esc(fmtDate(r.deliveredAt))}</td>
+      <td>${r.category ? esc(r.category) : `<span class="nocat">no category</span>`}</td>
+      <td>${esc(r.subject || "—")}</td>
+      <td style="text-align:center">${r.revisions>=3?`<span class="pill warn">${r.revisions}</span>`:r.revisions}</td>
+      <td>${sentimentPill(r)}</td>
+      <td class="mono">${esc(maskPhone(r.sessionId))}</td>
+    </tr>`).join("");
+  $("listWrap").innerHTML = `<table>
+    <thead><tr><th>Delivered</th><th>Category</th><th>Subject</th><th>Redraws</th><th>Feedback</th><th>Citizen</th></tr></thead>
+    <tbody>${body}</tbody></table>
+    <p class="muted mono" style="margin-top:10px">${rows.length} of ${total} shown</p>`;
+}
+
+function letterText(d){
+  if(!d) return "<span class='muted'>Letter content not stored.</span>";
+  const parts = [];
+  if(d.senderBlock) parts.push(esc(d.senderBlock));
+  if(d.date) parts.push(esc(d.date));
+  if(d.addresseeBlock) parts.push("பெறுநர்:\n" + esc(d.addresseeBlock));
+  if(d.subject) parts.push(`<span class="subj">பொருள்: ${esc(d.subject)}</span>`);
+  if(d.salutation) parts.push(esc(d.salutation));
+  (d.bodyParagraphs||[]).forEach(p => parts.push(esc(p)));
+  if(d.closing) parts.push(esc(d.closing));
+  if(d.signatureLine) parts.push(esc(d.signatureLine));
+  if(d.copyTo) parts.push("நகல்:\n" + esc(d.copyTo));
+  return parts.join("\n\n");
+}
+
+async function openLetter(sessionId){
+  $("scrim").classList.add("open"); $("drawer").classList.add("open");
+  $("dBody").innerHTML = `<p class="muted">Loading…</p>`;
+  try{
+    const L = await api("/api/admin/letters/" + encodeURIComponent(sessionId));
+    const d = L.draft;
+    const enc = encodeURIComponent(sessionId);
+    const meta = [
+      ["Category", L.category ? esc(L.category) : `<span class="nocat">no category (generic)</span>`],
+      ["Letter type", esc(L.letterType || "—")],
+      ["Redraws", esc(L.revisions)],
+      ["Citizen", `<span class="mono">${esc(maskPhone(sessionId))}</span>`],
+    ].map(([k,v]) => `<div><div class="k">${k}</div>${v}</div>`).join("");
+    const fb = (L.feedback||[]).map(f =>
+      `<div class="fb">${f.rating?`<span class="stars">${stars(f.rating)}</span> `:""}<span class="pill ${f.sentiment==="positive"?"pos":f.sentiment==="negative"?"neg":""}">${esc(f.sentiment)}</span><br>${esc(f.text)}</div>`
+    ).join("") || `<p class="muted">No feedback captured.</p>`;
+    $("dBody").innerHTML = `
+      <div class="meta">${meta}</div>
+      <div class="row-actions">
+        <button class="btn" onclick="downloadDoc('${enc}','pdf')">Open PDF</button>
+        <button class="btn" onclick="downloadDoc('${enc}','docx')">Download Word</button>
+      </div>
+      <div class="section-h" style="margin-top:6px">Letter</div>
+      <div class="letter">${letterText(d)}</div>
+      <div class="section-h">Feedback</div>
+      ${fb}`;
+  }catch(e){ if(e.message!=="auth") $("dBody").innerHTML = `<p class="err">Could not load: ${esc(e.message)}</p>`; }
+}
+function closeDrawer(){ $("scrim").classList.remove("open"); $("drawer").classList.remove("open"); }
+
+async function downloadDoc(enc, kind){
+  try{
+    const res = await fetch(`/api/admin/letters/${enc}/${kind}`, { headers: authHeaders() });
+    if(!res.ok){ alert("Document failed: HTTP " + res.status); return; }
+    const url = URL.createObjectURL(await res.blob());
+    if(kind === "pdf"){ window.open(url, "_blank"); }
+    else { const a = document.createElement("a"); a.href = url; a.download = "madal-letter.docx"; a.click(); }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }catch(e){ alert("Document failed: " + e.message); }
+}
+
+document.addEventListener("keydown", e => { if(e.key === "Escape") closeDrawer(); });
+$("token").addEventListener("keydown", e => { if(e.key === "Enter") login(); });
+if(TOKEN) showApp();
+</script>
+</body>
+</html>

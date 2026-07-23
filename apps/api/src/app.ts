@@ -30,6 +30,17 @@ export interface ApiDeps {
   resolveEscalation(id: string): Promise<void>;
   checkPostgres(): Promise<boolean>;
   checkRedis(): Promise<boolean>;
+  // --- Admin portal (operator-token gated) ---
+  adminSummary(): Promise<unknown>;
+  listAdminLetters(opts: { limit?: number; offset?: number }): Promise<unknown>;
+  getAdminLetter(sessionId: string): Promise<{ draft: unknown } | null>;
+  /** Render a stored draft to document bytes (Puppeteer/docx) for download. */
+  renderLetterPdf(draft: unknown): Promise<Buffer>;
+  renderLetterDocx(draft: unknown): Promise<Buffer>;
+  /** Record that an admin opened a specific letter (letter content is PII). */
+  logAdminView(sessionId: string): Promise<void>;
+  /** The static admin page HTML, served at GET /admin. Unset → 404. */
+  adminHtml?: string;
   /** Bearer token for /api/operator/* (decrypts PII). Unset → those routes return 503. */
   operatorToken?: string;
   /** Per-minute rate limits (defaults: assess 20, reassess 60). */
@@ -144,6 +155,77 @@ export async function buildApp(deps: ApiDeps): Promise<FastifyInstance> {
     const sessionId = (req.query as { sessionId?: string }).sessionId;
     return { audit: await deps.listAudit(sessionId) };
   });
+
+  // --- Admin portal --------------------------------------------------------
+  // The page shell (GET /admin) is served without a token — it only prompts for one;
+  // every data route below is operator-gated, so nothing sensitive leaks from the shell.
+  app.get("/admin", async (_req, reply) => {
+    if (!deps.adminHtml) {
+      reply.code(404).send("admin portal not built");
+      return reply;
+    }
+    reply.type("text/html").send(deps.adminHtml);
+    return reply;
+  });
+
+  app.get("/api/admin/summary", { preHandler: requireOperator }, async () => {
+    return deps.adminSummary();
+  });
+
+  app.get("/api/admin/letters", { preHandler: requireOperator }, async (req) => {
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = q.limit ? Number(q.limit) : undefined;
+    const offset = q.offset ? Number(q.offset) : undefined;
+    return deps.listAdminLetters({
+      limit: Number.isFinite(limit) ? limit : undefined,
+      offset: Number.isFinite(offset) ? offset : undefined,
+    });
+  });
+
+  app.get("/api/admin/letters/:sessionId", { preHandler: requireOperator }, async (req, reply) => {
+    const sessionId = (req.params as { sessionId: string }).sessionId;
+    const letter = await deps.getAdminLetter(sessionId);
+    if (!letter) {
+      reply.code(404).send({ error: "letter not found" });
+      return reply;
+    }
+    await deps.logAdminView(sessionId); // opening letter content is a logged action
+    return letter;
+  });
+
+  const sendDoc = async (
+    reply: FastifyReply,
+    sessionId: string,
+    kind: "pdf" | "docx",
+    render: (draft: unknown) => Promise<Buffer>,
+    mime: string,
+  ) => {
+    const letter = await deps.getAdminLetter(sessionId);
+    if (!letter?.draft) {
+      reply.code(404).send({ error: "letter not found" });
+      return reply;
+    }
+    await deps.logAdminView(sessionId);
+    const bytes = await render(letter.draft);
+    reply
+      .type(mime)
+      .header("content-disposition", `inline; filename="madal-${kind}.${kind}"`)
+      .send(bytes);
+    return reply;
+  };
+
+  app.get("/api/admin/letters/:sessionId/pdf", { preHandler: requireOperator }, async (req, reply) =>
+    sendDoc(reply, (req.params as { sessionId: string }).sessionId, "pdf", deps.renderLetterPdf, "application/pdf"),
+  );
+  app.get("/api/admin/letters/:sessionId/docx", { preHandler: requireOperator }, async (req, reply) =>
+    sendDoc(
+      reply,
+      (req.params as { sessionId: string }).sessionId,
+      "docx",
+      deps.renderLetterDocx,
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
+  );
 
   return app;
 }

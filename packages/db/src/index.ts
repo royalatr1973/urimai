@@ -58,6 +58,14 @@ export {
   type ApprovalLogInput,
   type FeedbackLogInput,
 } from "./letters.js";
+export {
+  getAdminSummary,
+  listAdminLetters,
+  getAdminLetter,
+  type AdminSummary,
+  type AdminLetterRow,
+  type AdminLetterDetail,
+} from "./admin.js";
 export { toOffice, listLatestOffices, type OfficeRow } from "./offices.js";
 export {
   listLatestGrievanceCategories,

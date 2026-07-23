@@ -11,6 +11,8 @@ export interface DraftLogInput {
   draft: LetterDraft;
   revision: number;
   draftHash: string;
+  /** Grievance category chosen at classify (300-way); null when it fell to the generic petition. */
+  categoryKey?: string | null;
 }
 
 /** Persist one draft revision; returns the row id (referenced by the approval). */
@@ -19,6 +21,7 @@ export async function saveLetterDraft(input: DraftLogInput): Promise<string> {
     data: {
       sessionId: input.sessionId,
       letterTypeKey: input.draft.letterTypeId,
+      categoryKey: input.categoryKey ?? null,
       typeVersion: input.draft.typeVersion,
       revision: input.revision,
       language: input.draft.language,
