@@ -192,7 +192,7 @@ function sentimentPill(row){
 function renderList(rows, total){
   if(!rows.length){ $("listWrap").innerHTML = `<div class="empty">No delivered letters yet.</div>`; return; }
   const body = rows.map(r => `
-    <tr onclick='openLetter(${JSON.stringify(r.sessionId)})'>
+    <tr onclick='openLetter(${JSON.stringify(r.id)}, ${JSON.stringify(r.sessionId)})'>
       <td>${esc(fmtDate(r.deliveredAt))}</td>
       <td>${r.category ? esc(r.category) : `<span class="nocat">no category</span>`}</td>
       <td>${esc(r.subject || "—")}</td>
@@ -221,18 +221,18 @@ function letterText(d){
   return parts.join("\n\n");
 }
 
-async function openLetter(sessionId){
+async function openLetter(letterId, sessionId){
   $("scrim").classList.add("open"); $("drawer").classList.add("open");
   $("dBody").innerHTML = `<p class="muted">Loading…</p>`;
   try{
-    const L = await api("/api/admin/letters/" + encodeURIComponent(sessionId));
+    const L = await api("/api/admin/letters/" + encodeURIComponent(letterId));
     const d = L.draft;
-    const enc = encodeURIComponent(sessionId);
+    const enc = encodeURIComponent(letterId);
     const meta = [
       ["Category", L.category ? esc(L.category) : `<span class="nocat">no category (generic)</span>`],
       ["Letter type", esc(L.letterType || "—")],
       ["Redraws", esc(L.revisions)],
-      ["Citizen", `<span class="mono">${esc(maskPhone(sessionId))}</span>`],
+      ["Citizen", `<span class="mono">${esc(maskPhone(L.sessionId || sessionId))}</span>`],
     ].map(([k,v]) => `<div><div class="k">${k}</div>${v}</div>`).join("");
     const fb = (L.feedback||[]).map(f =>
       `<div class="fb">${f.rating?`<span class="stars">${stars(f.rating)}</span> `:""}<span class="pill ${f.sentiment==="positive"?"pos":f.sentiment==="negative"?"neg":""}">${esc(f.sentiment)}</span><br>${esc(f.text)}</div>`

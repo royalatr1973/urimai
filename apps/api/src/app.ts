@@ -33,7 +33,7 @@ export interface ApiDeps {
   // --- Admin portal (operator-token gated) ---
   adminSummary(): Promise<unknown>;
   listAdminLetters(opts: { limit?: number; offset?: number }): Promise<unknown>;
-  getAdminLetter(sessionId: string): Promise<{ draft: unknown } | null>;
+  getAdminLetter(letterId: string): Promise<{ draft: unknown } | null>;
   /** Render a stored draft to document bytes (Puppeteer/docx) for download. */
   renderLetterPdf(draft: unknown): Promise<Buffer>;
   renderLetterDocx(draft: unknown): Promise<Buffer>;
@@ -182,30 +182,30 @@ export async function buildApp(deps: ApiDeps): Promise<FastifyInstance> {
     });
   });
 
-  app.get("/api/admin/letters/:sessionId", { preHandler: requireOperator }, async (req, reply) => {
-    const sessionId = (req.params as { sessionId: string }).sessionId;
-    const letter = await deps.getAdminLetter(sessionId);
+  app.get("/api/admin/letters/:letterId", { preHandler: requireOperator }, async (req, reply) => {
+    const letterId = (req.params as { letterId: string }).letterId;
+    const letter = await deps.getAdminLetter(letterId);
     if (!letter) {
       reply.code(404).send({ error: "letter not found" });
       return reply;
     }
-    await deps.logAdminView(sessionId); // opening letter content is a logged action
+    await deps.logAdminView(letterId); // opening letter content is a logged action
     return letter;
   });
 
   const sendDoc = async (
     reply: FastifyReply,
-    sessionId: string,
+    letterId: string,
     kind: "pdf" | "docx",
     render: (draft: unknown) => Promise<Buffer>,
     mime: string,
   ) => {
-    const letter = await deps.getAdminLetter(sessionId);
+    const letter = await deps.getAdminLetter(letterId);
     if (!letter?.draft) {
       reply.code(404).send({ error: "letter not found" });
       return reply;
     }
-    await deps.logAdminView(sessionId);
+    await deps.logAdminView(letterId);
     const bytes = await render(letter.draft);
     reply
       .type(mime)
@@ -214,13 +214,13 @@ export async function buildApp(deps: ApiDeps): Promise<FastifyInstance> {
     return reply;
   };
 
-  app.get("/api/admin/letters/:sessionId/pdf", { preHandler: requireOperator }, async (req, reply) =>
-    sendDoc(reply, (req.params as { sessionId: string }).sessionId, "pdf", deps.renderLetterPdf, "application/pdf"),
+  app.get("/api/admin/letters/:letterId/pdf", { preHandler: requireOperator }, async (req, reply) =>
+    sendDoc(reply, (req.params as { letterId: string }).letterId, "pdf", deps.renderLetterPdf, "application/pdf"),
   );
-  app.get("/api/admin/letters/:sessionId/docx", { preHandler: requireOperator }, async (req, reply) =>
+  app.get("/api/admin/letters/:letterId/docx", { preHandler: requireOperator }, async (req, reply) =>
     sendDoc(
       reply,
-      (req.params as { sessionId: string }).sessionId,
+      (req.params as { letterId: string }).letterId,
       "docx",
       deps.renderLetterDocx,
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

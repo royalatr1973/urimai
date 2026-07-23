@@ -17,9 +17,9 @@ function fakeDeps(over: Partial<ApiDeps> = {}): ApiDeps {
     checkPostgres: async () => true,
     checkRedis: async () => true,
     adminSummary: async () => ({ deliveredTotal: 3, pendingEscalations: 1 }),
-    listAdminLetters: async () => ({ total: 1, letters: [{ sessionId: "wa:9199", subject: "test" }] }),
-    getAdminLetter: async (sessionId: string) =>
-      sessionId === "wa:9199" ? { draft: { subject: "test", bodyParagraphs: ["hi"] } } : null,
+    listAdminLetters: async () => ({ total: 1, letters: [{ id: "d1", sessionId: "wa:9199", subject: "test" }] }),
+    getAdminLetter: async (letterId: string) =>
+      letterId === "d1" ? { draft: { subject: "test", bodyParagraphs: ["hi"] } } : null,
     renderLetterPdf: async () => Buffer.from("%PDF-fake"),
     renderLetterDocx: async () => Buffer.from("PKfake"),
     logAdminView: vi.fn(async () => {}),
@@ -97,7 +97,7 @@ describe("admin portal", () => {
 
   it("gates every admin data route behind the operator token", async () => {
     const app = await buildApp(fakeDeps());
-    for (const url of ["/api/admin/summary", "/api/admin/letters", "/api/admin/letters/wa:9199", "/api/admin/letters/wa:9199/pdf"]) {
+    for (const url of ["/api/admin/summary", "/api/admin/letters", "/api/admin/letters/d1", "/api/admin/letters/d1/pdf"]) {
       expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
     }
   });
@@ -113,15 +113,15 @@ describe("admin portal", () => {
   it("logs the view and renders documents for a known letter; 404s an unknown one", async () => {
     const deps = fakeDeps();
     const app = await buildApp(deps);
-    const detail = await app.inject({ method: "GET", url: "/api/admin/letters/wa:9199", headers: auth });
+    const detail = await app.inject({ method: "GET", url: "/api/admin/letters/d1", headers: auth });
     expect(detail.statusCode).toBe(200);
-    expect(deps.logAdminView).toHaveBeenCalledWith("wa:9199");
+    expect(deps.logAdminView).toHaveBeenCalledWith("d1");
 
-    const pdf = await app.inject({ method: "GET", url: "/api/admin/letters/wa:9199/pdf", headers: auth });
+    const pdf = await app.inject({ method: "GET", url: "/api/admin/letters/d1/pdf", headers: auth });
     expect(pdf.statusCode).toBe(200);
     expect(pdf.headers["content-type"]).toContain("application/pdf");
 
-    const missing = await app.inject({ method: "GET", url: "/api/admin/letters/wa:0000", headers: auth });
+    const missing = await app.inject({ method: "GET", url: "/api/admin/letters/nope", headers: auth });
     expect(missing.statusCode).toBe(404);
   });
 });

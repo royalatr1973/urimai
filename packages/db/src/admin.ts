@@ -1,16 +1,81 @@
 /**
  * Admin-portal reads (July 2026): the dashboard summary, the letters list, and one
- * letter's detail. A "letter" is a distinct session that reached a logged approval
- * (i.e. was delivered). These are read-only aggregates over letter_drafts /
- * letter_approvals / letter_feedback / escalations — no writes, no PII decryption
- * (the sessionId carries the phone; the API gates access with the operator token and
- * the UI masks it). Volumes are small in this phase, so grouping is done in JS rather
- * than SQL window functions; revisit if the tables grow large.
+ * letter's detail. A "letter" is a distinct APPROVED DRAFT — identified by the draft id
+ * an approval references — NOT the session. One phone (sessionId) reuses its session
+ * across many letters, so keying by session would collapse them into one row; keying by
+ * the approved draft gives one row per delivered letter, which is what an operator wants.
+ *
+ * Read-only aggregates over letter_drafts / letter_approvals / letter_feedback /
+ * escalations — no writes, no PII decryption (the API gates access with the operator
+ * token and the UI masks the phone). Volumes are small in this phase, so grouping and
+ * the feedback-to-letter windowing are done in JS; revisit if the tables grow large.
  */
 import type { LetterDraft } from "@urimai/types";
 import { getPrisma } from "./client.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+interface DeliveredLetter {
+  draftId: string;
+  sessionId: string;
+  approvedAt: Date;
+  revisions: number;
+}
+
+type FeedbackRow = {
+  sessionId: string;
+  categoryKey: string | null;
+  createdAt: Date;
+  sentiment: string;
+  rating: number | null;
+  text: string;
+};
+
+/** One delivered letter per distinct approved draft (a letter can have >1 approval row). */
+async function deliveredLetters(): Promise<DeliveredLetter[]> {
+  const approvals = await getPrisma().letterApproval.findMany({ orderBy: { approvedAt: "desc" } });
+  const byDraft = new Map<string, DeliveredLetter>();
+  for (const a of approvals) {
+    const cur = byDraft.get(a.draftId);
+    if (!cur || a.approvedAt.getTime() > cur.approvedAt.getTime()) {
+      byDraft.set(a.draftId, { draftId: a.draftId, sessionId: a.sessionId, approvedAt: a.approvedAt, revisions: a.revisions });
+    }
+  }
+  return [...byDraft.values()].sort((x, y) => y.approvedAt.getTime() - x.approvedAt.getTime());
+}
+
+/**
+ * Feedback rows key only by session, but a session holds many letters — so assign each
+ * feedback to the letter whose approval-time window [approvedAt, nextApprovedAt) contains
+ * it (feedback is given right after a letter's final approval). Returns draftId → its feedback.
+ */
+function matchFeedbackToLetters(letters: DeliveredLetter[], feedback: FeedbackRow[]): Map<string, FeedbackRow[]> {
+  const bySession = new Map<string, DeliveredLetter[]>();
+  for (const L of letters) {
+    const arr = bySession.get(L.sessionId) ?? [];
+    arr.push(L);
+    bySession.set(L.sessionId, arr);
+  }
+  for (const arr of bySession.values()) arr.sort((a, b) => a.approvedAt.getTime() - b.approvedAt.getTime());
+
+  const out = new Map<string, FeedbackRow[]>();
+  for (const f of feedback) {
+    const arr = bySession.get(f.sessionId);
+    if (!arr) continue;
+    for (let i = 0; i < arr.length; i++) {
+      const start = arr[i]!.approvedAt.getTime();
+      const end = i + 1 < arr.length ? arr[i + 1]!.approvedAt.getTime() : Infinity;
+      if (f.createdAt.getTime() >= start && f.createdAt.getTime() < end) {
+        const list = out.get(arr[i]!.draftId) ?? [];
+        list.push(f);
+        out.set(arr[i]!.draftId, list);
+        break;
+      }
+    }
+  }
+  for (const arr of out.values()) arr.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return out;
+}
 
 export interface AdminSummary {
   deliveredTotal: number;
@@ -23,52 +88,25 @@ export interface AdminSummary {
   topCategories: Array<{ category: string; count: number }>;
 }
 
-/** Latest approval per session = the set of delivered letters. */
-async function deliveredSessions(): Promise<Map<string, { approvedAt: Date; revisions: number }>> {
-  const approvals = await getPrisma().letterApproval.findMany({ orderBy: { approvedAt: "desc" } });
-  const latest = new Map<string, { approvedAt: Date; revisions: number }>();
-  for (const a of approvals) {
-    if (!latest.has(a.sessionId)) latest.set(a.sessionId, { approvedAt: a.approvedAt, revisions: a.revisions });
-  }
-  return latest;
-}
-
-/** Latest draft per session (carries letterTypeKey, categoryKey, and the full letter JSON). */
-async function latestDraftsFor(sessionIds: string[]) {
-  const drafts = await getPrisma().letterDraft.findMany({
-    where: { sessionId: { in: sessionIds } },
-    orderBy: { revision: "desc" },
-  });
-  const by = new Map<string, (typeof drafts)[number]>();
-  for (const d of drafts) if (!by.has(d.sessionId)) by.set(d.sessionId, d);
-  return by;
-}
-
 export async function getAdminSummary(now: Date = new Date()): Promise<AdminSummary> {
   const p = getPrisma();
-  const delivered = await deliveredSessions();
-  const sessionIds = [...delivered.keys()];
+  const all = await deliveredLetters();
   const cutoff = new Date(now.getTime() - 7 * DAY_MS);
 
-  const drafts = await latestDraftsFor(sessionIds);
-  // Category fallback to feedback for drafts logged before categoryKey existed — matches
-  // the list view, so the dashboard counts and the table agree.
-  const fbCats = await p.letterFeedback.findMany({
-    where: { sessionId: { in: sessionIds }, categoryKey: { not: null } },
-    select: { sessionId: true, categoryKey: true },
-    orderBy: { createdAt: "desc" },
-  });
-  const fbCatBy = new Map<string, string>();
-  for (const f of fbCats) if (f.categoryKey && !fbCatBy.has(f.sessionId)) fbCatBy.set(f.sessionId, f.categoryKey);
+  const draftRows = await p.letterDraft.findMany({ where: { id: { in: all.map((L) => L.draftId) } } });
+  const draftById = new Map(draftRows.map((d) => [d.id, d]));
+  const sessionIds = [...new Set(all.map((L) => L.sessionId))];
+  const feedbackRows = (await p.letterFeedback.findMany({ where: { sessionId: { in: sessionIds } } })) as FeedbackRow[];
+  const fbByDraft = matchFeedbackToLetters(all, feedbackRows);
 
   let deliveredLast7d = 0;
   let highRevision = 0;
   let unmatchedCategory = 0;
   const catCounts = new Map<string, number>();
-  for (const [sid, info] of delivered) {
-    if (info.approvedAt >= cutoff) deliveredLast7d += 1;
-    if (info.revisions >= 3) highRevision += 1;
-    const cat = drafts.get(sid)?.categoryKey ?? fbCatBy.get(sid) ?? null;
+  for (const L of all) {
+    if (L.approvedAt >= cutoff) deliveredLast7d += 1;
+    if (L.revisions >= 3) highRevision += 1;
+    const cat = draftById.get(L.draftId)?.categoryKey ?? fbByDraft.get(L.draftId)?.[0]?.categoryKey ?? null;
     if (!cat) unmatchedCategory += 1;
     else catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1);
   }
@@ -87,7 +125,7 @@ export async function getAdminSummary(now: Date = new Date()): Promise<AdminSumm
   const sentimentCount = (s: string) => sentiments.find((r) => r.sentiment === s)?._count._all ?? 0;
 
   return {
-    deliveredTotal: delivered.size,
+    deliveredTotal: all.length,
     deliveredLast7d,
     feedback: {
       count: fbCount,
@@ -105,7 +143,8 @@ export async function getAdminSummary(now: Date = new Date()): Promise<AdminSumm
 }
 
 export interface AdminLetterRow {
-  sessionId: string;
+  id: string; // the approved draft id — the letter's stable identifier
+  sessionId: string; // carries the phone; UI masks it
   deliveredAt: Date;
   revisions: number;
   letterType: string | null;
@@ -122,27 +161,24 @@ export async function listAdminLetters(opts: { limit?: number; offset?: number }
 }> {
   const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
   const offset = Math.max(opts.offset ?? 0, 0);
-  const delivered = await deliveredSessions();
-  const ordered = [...delivered.entries()].sort((a, b) => b[1].approvedAt.getTime() - a[1].approvedAt.getTime());
-  const page = ordered.slice(offset, offset + limit);
-  const ids = page.map(([sid]) => sid);
+  const all = await deliveredLetters();
+  const page = all.slice(offset, offset + limit);
 
-  const drafts = await latestDraftsFor(ids);
-  const feedback = await getPrisma().letterFeedback.findMany({
-    where: { sessionId: { in: ids } },
-    orderBy: { createdAt: "desc" },
-  });
-  const fbBy = new Map<string, (typeof feedback)[number]>();
-  for (const f of feedback) if (!fbBy.has(f.sessionId)) fbBy.set(f.sessionId, f);
+  const draftRows = await getPrisma().letterDraft.findMany({ where: { id: { in: page.map((L) => L.draftId) } } });
+  const draftById = new Map(draftRows.map((d) => [d.id, d]));
+  const sessionIds = [...new Set(all.map((L) => L.sessionId))];
+  const feedbackRows = (await getPrisma().letterFeedback.findMany({ where: { sessionId: { in: sessionIds } } })) as FeedbackRow[];
+  const fbByDraft = matchFeedbackToLetters(all, feedbackRows);
 
-  const letters = page.map(([sessionId, info]): AdminLetterRow => {
-    const d = drafts.get(sessionId);
-    const f = fbBy.get(sessionId);
+  const letters = page.map((L): AdminLetterRow => {
+    const d = draftById.get(L.draftId);
+    const f = fbByDraft.get(L.draftId)?.[0] ?? null;
     const draftJson = (d?.draft ?? null) as LetterDraft | null;
     return {
-      sessionId,
-      deliveredAt: info.approvedAt,
-      revisions: info.revisions,
+      id: L.draftId,
+      sessionId: L.sessionId,
+      deliveredAt: L.approvedAt,
+      revisions: L.revisions,
       letterType: d?.letterTypeKey ?? null,
       category: d?.categoryKey ?? f?.categoryKey ?? null,
       subject: draftJson?.subject ?? null,
@@ -151,10 +187,11 @@ export async function listAdminLetters(opts: { limit?: number; offset?: number }
       hasFeedback: Boolean(f),
     };
   });
-  return { total: delivered.size, letters };
+  return { total: all.length, letters };
 }
 
 export interface AdminLetterDetail {
+  id: string;
   sessionId: string;
   letterType: string | null;
   category: string | null;
@@ -165,27 +202,34 @@ export interface AdminLetterDetail {
   feedback: Array<{ createdAt: Date; sentiment: string; rating: number | null; text: string }>;
 }
 
-/** One letter's full record. Callers should audit this read — it exposes letter content. */
-export async function getAdminLetter(sessionId: string): Promise<AdminLetterDetail | null> {
+/** One letter's full record, keyed by the approved draft id. Callers should audit this read. */
+export async function getAdminLetter(letterId: string): Promise<AdminLetterDetail | null> {
   const p = getPrisma();
-  const drafts = await p.letterDraft.findMany({ where: { sessionId }, orderBy: { revision: "desc" } });
-  const approvals = await p.letterApproval.findMany({ where: { sessionId }, orderBy: { approvedAt: "desc" } });
-  const feedback = await p.letterFeedback.findMany({ where: { sessionId }, orderBy: { createdAt: "desc" } });
-  if (drafts.length === 0 && approvals.length === 0) return null;
-  const top = drafts[0] ?? null;
+  const draft = await p.letterDraft.findUnique({ where: { id: letterId } });
+  if (!draft) return null;
+  const approvals = await p.letterApproval.findMany({ where: { draftId: letterId }, orderBy: { approvedAt: "desc" } });
+
+  const all = await deliveredLetters();
+  const sessionFeedback = (await p.letterFeedback.findMany({ where: { sessionId: draft.sessionId } })) as FeedbackRow[];
+  const matched = matchFeedbackToLetters(
+    all.filter((L) => L.sessionId === draft.sessionId),
+    sessionFeedback,
+  ).get(letterId) ?? [];
+
   return {
-    sessionId,
-    letterType: top?.letterTypeKey ?? null,
-    category: top?.categoryKey ?? feedback[0]?.categoryKey ?? null,
-    revisions: approvals[0]?.revisions ?? top?.revision ?? 0,
-    transcript: top?.transcript ?? null,
-    draft: (top?.draft ?? null) as LetterDraft | null,
+    id: letterId,
+    sessionId: draft.sessionId,
+    letterType: draft.letterTypeKey,
+    category: draft.categoryKey ?? matched[0]?.categoryKey ?? null,
+    revisions: approvals[0]?.revisions ?? draft.revision,
+    transcript: draft.transcript ?? null,
+    draft: (draft.draft ?? null) as LetterDraft | null,
     approvals: approvals.map((a) => ({
       approvedAt: a.approvedAt,
       approvalUtterance: a.approvalUtterance,
       revisions: a.revisions,
       draftHash: a.draftHash,
     })),
-    feedback: feedback.map((f) => ({ createdAt: f.createdAt, sentiment: f.sentiment, rating: f.rating, text: f.text })),
+    feedback: matched.map((f) => ({ createdAt: f.createdAt, sentiment: f.sentiment, rating: f.rating, text: f.text })),
   };
 }
