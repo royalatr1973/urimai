@@ -159,6 +159,7 @@ export interface AdminLetterDetail {
   letterType: string | null;
   category: string | null;
   revisions: number;
+  transcript: string | null; // what the citizen told Madal (null for letters drafted before capture)
   draft: LetterDraft | null; // the full letter (for text + document regeneration)
   approvals: Array<{ approvedAt: Date; approvalUtterance: string; revisions: number; draftHash: string }>;
   feedback: Array<{ createdAt: Date; sentiment: string; rating: number | null; text: string }>;
@@ -177,6 +178,7 @@ export async function getAdminLetter(sessionId: string): Promise<AdminLetterDeta
     letterType: top?.letterTypeKey ?? null,
     category: top?.categoryKey ?? feedback[0]?.categoryKey ?? null,
     revisions: approvals[0]?.revisions ?? top?.revision ?? 0,
+    transcript: top?.transcript ?? null,
     draft: (top?.draft ?? null) as LetterDraft | null,
     approvals: approvals.map((a) => ({
       approvedAt: a.approvedAt,

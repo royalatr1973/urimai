@@ -243,7 +243,9 @@ async function openLetter(sessionId){
         <button class="btn" onclick="downloadDoc('${enc}','pdf')">Open PDF</button>
         <button class="btn" onclick="downloadDoc('${enc}','docx')">Download Word</button>
       </div>
-      <div class="section-h" style="margin-top:6px">Letter</div>
+      <div class="section-h" style="margin-top:6px">What the citizen said</div>
+      ${L.transcript ? `<div class="letter">${esc(L.transcript)}</div>` : `<p class="muted">Not captured for this letter (drafted before transcript capture was added).</p>`}
+      <div class="section-h">Letter</div>
       <div class="letter">${letterText(d)}</div>
       <div class="section-h">Feedback</div>
       ${fb}`;

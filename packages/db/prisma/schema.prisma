@@ -183,6 +183,7 @@ model LetterDraft {
   typeVersion   Int
   revision      Int              @default(0)
   language      String // "ta" | "en" | "bilingual"
+  transcript    String? // the citizen's accumulated narration that produced this draft (PII)
   draft         Json
   draftHash     String // sha256 of the assembled letter text
   createdAt     DateTime         @default(now())

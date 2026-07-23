@@ -13,6 +13,8 @@ export interface DraftLogInput {
   draftHash: string;
   /** Grievance category chosen at classify (300-way); null when it fell to the generic petition. */
   categoryKey?: string | null;
+  /** The citizen's accumulated narration that produced this draft (PII); null if unavailable. */
+  transcript?: string | null;
 }
 
 /** Persist one draft revision; returns the row id (referenced by the approval). */
@@ -25,6 +27,7 @@ export async function saveLetterDraft(input: DraftLogInput): Promise<string> {
       typeVersion: input.draft.typeVersion,
       revision: input.revision,
       language: input.draft.language,
+      transcript: input.transcript ?? null,
       draft: input.draft as unknown as object,
       draftHash: input.draftHash,
     },

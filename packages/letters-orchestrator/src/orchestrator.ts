@@ -103,6 +103,7 @@ export interface LettersOrchestratorDeps {
     revision: number;
     draftHash: string;
     categoryKey: string | null;
+    transcript: string | null;
   }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
   logApproval?: (input: {
@@ -282,7 +283,14 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     });
     const hash = draftHash(draft);
     const draftId = deps.logDraft
-      ? await deps.logDraft({ sessionId, draft, revision: state.revisions, draftHash: hash, categoryKey: state.categoryId })
+      ? await deps.logDraft({
+          sessionId,
+          draft,
+          revision: state.revisions,
+          draftHash: hash,
+          categoryKey: state.categoryId,
+          transcript: state.transcript || null,
+        })
       : null;
     const next: SessionState = { ...state, phase, pendingFact: null, draft, draftId };
     await save(sessionId, next);
