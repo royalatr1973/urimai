@@ -38,9 +38,12 @@ if ! /c/Users/Admin/redis/redis-cli.exe ping 2>/dev/null | grep -q PONG; then
 fi
 
 # --- clean slate: exactly one server, one tunnel --------------------------------
-echo "[1/5] stopping any existing server/tunnel..."
+# Stop ONLY the process listening on :3100 (this webhook server) — NOT every node
+# server.ts. The admin API (apps/api) also runs a file called server.ts with an
+# identical command line; targeting by port avoids killing it here.
+echo "[1/5] stopping any existing webhook server/tunnel on :3100..."
 powershell.exe -NoProfile -Command \
-  "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { \$_.CommandLine -like '*server.ts*' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force -ErrorAction SilentlyContinue }; Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force" \
+  "Get-NetTCPConnection -LocalPort 3100 -State Listen -ErrorAction SilentlyContinue | Select-Object -Expand OwningProcess -Unique | ForEach-Object { Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue }; Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force" \
   2>/dev/null || true
 sleep 1
 
