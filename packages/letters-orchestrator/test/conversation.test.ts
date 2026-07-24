@@ -95,6 +95,13 @@ describe("full letters conversation", () => {
     expect(t4c.draft.bodyParagraphs.join()).toContain("திருட்டு");
     expect(f.drafts).toHaveLength(1);
 
+    // The full Q&A is captured on the draft for the admin view: the citizen's answers
+    // are paired with the questions Madal asked (not just the citizen's side).
+    const answers = f.drafts[0]!.dialogue.map((t) => t.a);
+    expect(answers).toContain("கடலூர்");
+    expect(answers).toContain("நேத்து ராத்திரி");
+    expect(f.drafts[0]!.dialogue.some((t) => t.q.length > 0)).toBe(true); // Madal's questions captured too
+
     // Turn 5a — an ambiguous reply gets ONE clarifying question: no re-draft, no
     // revision burnt, no re-read (live-tester fix — the old loop re-read everything).
     const t5a = await orch.handleTurn(sid, "ம்ம் அது வந்து");

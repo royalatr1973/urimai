@@ -104,6 +104,7 @@ export interface LettersOrchestratorDeps {
     draftHash: string;
     categoryKey: string | null;
     transcript: string | null;
+    dialogue: Array<{ q: string; a: string }>;
   }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
   logApproval?: (input: {
@@ -179,6 +180,10 @@ interface SessionState {
   ccDisabled: boolean;
   /** To/CC offices resolved once for this letter; undefined = not yet attempted. */
   resolved?: ResolvedAddressee;
+  /** Full turn-by-turn Q&A for the admin view — each Madal question + the citizen's reply. */
+  dialogue: Array<{ q: string; a: string }>;
+  /** What Madal spoke at the end of the previous turn (the question the next reply answers). */
+  lastPrompt: string;
 }
 
 const EMPTY_STATE: SessionState = {
@@ -195,6 +200,8 @@ const EMPTY_STATE: SessionState = {
   draft: null,
   draftId: null,
   ccDisabled: false,
+  dialogue: [],
+  lastPrompt: "",
 };
 
 function decodeState(raw: string | null): SessionState {
@@ -290,6 +297,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
           draftHash: hash,
           categoryKey: state.categoryId,
           transcript: state.transcript || null,
+          dialogue: state.dialogue,
         })
       : null;
     const next: SessionState = { ...state, phase, pendingFact: null, draft, draftId };
@@ -373,7 +381,41 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     return produceDraft(sessionId, state, type);
   }
 
+  /** The Tamil text Madal speaks for a result — the "question" side of a dialogue turn. */
+  function spokenTextOf(r: LetterTurnResult): string {
+    if ("question" in r && r.question) return r.question.ta;
+    if ("prompt" in r && r.prompt) return r.prompt.ta;
+    return "";
+  }
+
+  /**
+   * Public entry: records the full Q&A for the admin view around the real turn logic.
+   * BEFORE processing we log (last question → this answer) so a draft logged this turn
+   * already carries it; AFTER, we remember what we just asked. Recording is best-effort
+   * — a store hiccup must never break the citizen's letter.
+   */
   async function handleTurn(sessionId: string, text: string): Promise<LetterTurnResult> {
+    try {
+      const pre = await load(sessionId);
+      pre.dialogue = [...pre.dialogue, { q: pre.lastPrompt, a: text }];
+      await save(sessionId, pre);
+    } catch {
+      /* dialogue capture is non-essential — proceed with the turn */
+    }
+    const result = await runTurn(sessionId, text);
+    if (result.kind !== "closed" && result.kind !== "escalate") {
+      try {
+        const post = await load(sessionId);
+        post.lastPrompt = spokenTextOf(result);
+        await save(sessionId, post);
+      } catch {
+        /* non-essential */
+      }
+    }
+    return result;
+  }
+
+  async function runTurn(sessionId: string, text: string): Promise<LetterTurnResult> {
     const state = await load(sessionId);
     const types = await deps.loadTypes();
 
@@ -595,7 +637,8 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
 
   /** Fresh conversation, no user text yet: the §7.2 listen prompt. */
   async function startSession(sessionId: string): Promise<LetterTurnResult> {
-    await save(sessionId, structuredClone(EMPTY_STATE));
+    // Seed lastPrompt so the citizen's first reply is paired with the opening question.
+    await save(sessionId, { ...structuredClone(EMPTY_STATE), lastPrompt: LISTEN_PROMPT.ta });
     return { kind: "listen", prompt: LISTEN_PROMPT };
   }
 

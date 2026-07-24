@@ -77,6 +77,11 @@
   .letter{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px;
     font-family:var(--tamil);font-size:14.5px;line-height:1.7;white-space:pre-wrap}
   .letter .subj{font-weight:600}
+  .chat{display:flex;flex-direction:column;gap:8px}
+  .turn{max-width:85%;padding:9px 12px;border-radius:12px;font-family:var(--tamil);font-size:14px;line-height:1.55}
+  .turn .who{display:block;font-family:var(--sans);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;opacity:.7;margin-bottom:2px}
+  .turn.q{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:3px}
+  .turn.a{align-self:flex-end;background:var(--teal-bg);border:1px solid var(--teal);border-bottom-right-radius:3px}
   .fb{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--teal);
     border-radius:0 10px 10px 0;padding:12px 14px;margin-top:12px;font-family:var(--tamil)}
   .row-actions{display:flex;gap:10px;margin:16px 0}
@@ -206,6 +211,16 @@ function renderList(rows, total){
     <p class="muted mono" style="margin-top:10px">${rows.length} of ${total} shown</p>`;
 }
 
+function conversationHtml(L){
+  if(Array.isArray(L.dialogue) && L.dialogue.length){
+    return `<div class="chat">` + L.dialogue.map(t => `
+      ${t.q ? `<div class="turn q"><span class="who">Madal</span>${esc(t.q)}</div>` : ""}
+      ${t.a ? `<div class="turn a"><span class="who">Citizen</span>${esc(t.a)}</div>` : ""}`).join("") + `</div>`;
+  }
+  if(L.transcript) return `<div class="letter">${esc(L.transcript)}</div><p class="muted" style="font-size:12px;margin-top:6px">Only the citizen's side was captured for this letter (before question capture was added).</p>`;
+  return `<p class="muted">Conversation not captured for this letter (drafted before capture was added).</p>`;
+}
+
 function letterText(d){
   if(!d) return "<span class='muted'>Letter content not stored.</span>";
   const parts = [];
@@ -243,8 +258,8 @@ async function openLetter(letterId, sessionId){
         <button class="btn" onclick="downloadDoc('${enc}','pdf')">Open PDF</button>
         <button class="btn" onclick="downloadDoc('${enc}','docx')">Download Word</button>
       </div>
-      <div class="section-h" style="margin-top:6px">What the citizen said</div>
-      ${L.transcript ? `<div class="letter">${esc(L.transcript)}</div>` : `<p class="muted">Not captured for this letter (drafted before transcript capture was added).</p>`}
+      <div class="section-h" style="margin-top:6px">Conversation</div>
+      ${conversationHtml(L)}
       <div class="section-h">Letter</div>
       <div class="letter">${letterText(d)}</div>
       <div class="section-h">Feedback</div>

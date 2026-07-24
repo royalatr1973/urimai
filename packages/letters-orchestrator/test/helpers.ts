@@ -47,7 +47,7 @@ export interface FakeDeps {
   deps: LettersOrchestratorDeps;
   store: ReturnType<typeof memoryStore>;
   calls: { classify: string[]; extract: Array<{ text: string; pendingFact: string | null }>; draft: number; resolve: number };
-  drafts: Array<{ revision: number; draftHash: string }>;
+  drafts: Array<{ revision: number; draftHash: string; dialogue: Array<{ q: string; a: string }> }>;
   approvals: Array<{ draftId: string | null; approvalUtterance: string; revisions: number }>;
   feedback: Array<{ sentiment: string; rating: number | null; text: string; categoryKey: string | null }>;
   /** Script the next extraction result(s); consumed in order, then empty facts. */
@@ -93,7 +93,7 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
       };
     },
     logDraft: async (input) => {
-      drafts.push({ revision: input.revision, draftHash: input.draftHash });
+      drafts.push({ revision: input.revision, draftHash: input.draftHash, dialogue: input.dialogue });
       return `draft-${++draftSeq}`;
     },
     logApproval: async (input) => {

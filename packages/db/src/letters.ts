@@ -15,6 +15,8 @@ export interface DraftLogInput {
   categoryKey?: string | null;
   /** The citizen's accumulated narration that produced this draft (PII); null if unavailable. */
   transcript?: string | null;
+  /** Full turn-by-turn Q&A between Madal and the citizen (PII); [] if unavailable. */
+  dialogue?: Array<{ q: string; a: string }> | null;
 }
 
 /** Persist one draft revision; returns the row id (referenced by the approval). */
@@ -28,6 +30,7 @@ export async function saveLetterDraft(input: DraftLogInput): Promise<string> {
       revision: input.revision,
       language: input.draft.language,
       transcript: input.transcript ?? null,
+      dialogue: (input.dialogue && input.dialogue.length > 0 ? input.dialogue : null) as unknown as object,
       draft: input.draft as unknown as object,
       draftHash: input.draftHash,
     },
