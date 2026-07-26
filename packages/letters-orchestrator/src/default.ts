@@ -37,14 +37,13 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
   return createLettersOrchestrator({
     store,
     loadTypes: () => listLatestLetterTypes(),
-    // Cost control (July 2026): classify + extract are structured, narrow tasks — run them
-    // on the cheap fast model (Haiku by default), keeping the strong ANTHROPIC_MODEL only
-    // for the quality-sensitive drafting. Override with ANTHROPIC_FAST_MODEL.
-    // Classification also picks the curator grievance category (300-way) — its
-    // escalation chain then decides the To/CC designations below.
+    // Classification MUST use the strong ANTHROPIC_MODEL: the 300-way grievance match is
+    // hard, and a miss is expensive — a wrong/absent category loses the To/CC chain and
+    // (with the office directory retired) falls to the web-search fallback below. The
+    // narrower extraction can run on the cheap fast model (ANTHROPIC_FAST_MODEL, Haiku).
     classify: async (text, types) => {
       const categories = await listLatestGrievanceCategories();
-      return classifyLetter(text, types, { model: fastModel }, categories.map((c) => c.id));
+      return classifyLetter(text, types, {}, categories.map((c) => c.id));
     },
     extract: (text, pendingFact) => extractLetterFacts(text, { pendingFact, model: fastModel }),
     draft: async (type, facts, req) => {
@@ -86,8 +85,12 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
         else cc = pickCcOffices(offices, type.id, pickToOffice(offices, type.id)?.id ?? undefined).slice(0, 2);
       }
 
-      // Rare case: no category matched AND the directory has nothing — one web search.
-      if ((need.to && !to) || (need.cc && cc.length === 0)) {
+      // Web-search fallback — OFF by default (ADDRESSEE_WEB_SEARCH=on to enable). It fetches
+      // web pages, which can balloon to 100k+ tokens (~₹100/letter) — a real blow-up seen
+      // in production when Haiku mis-classifies and this fires on every no-category letter.
+      // With the category chain handling the common case, a blank To (the drafter falls back
+      // to the type's addressee hint) is far safer than an unbounded, expensive search.
+      if (process.env.ADDRESSEE_WEB_SEARCH === "on" && ((need.to && !to) || (need.cc && cc.length === 0))) {
         const found = await searchAddressee(type, facts, {}); // never throws; nulls on failure
         if (need.to && !to) to = found.to;
         if (need.cc && cc.length === 0) cc = found.cc.slice(0, 2);
