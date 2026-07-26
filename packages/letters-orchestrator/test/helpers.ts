@@ -4,7 +4,7 @@
  */
 import type { LetterDraft, LetterFacts, LetterType } from "@urimai/types";
 import { SEED_LETTER_TYPES } from "@urimai/letter-types";
-import { recordUsage } from "@urimai/usage";
+import { recordUsage, type LlmUsage } from "@urimai/usage";
 import type { LettersOrchestratorDeps, SessionStore } from "../src/orchestrator.js";
 
 export function memoryStore(): SessionStore & { map: Map<string, string> } {
@@ -48,12 +48,7 @@ export interface FakeDeps {
   deps: LettersOrchestratorDeps;
   store: ReturnType<typeof memoryStore>;
   calls: { classify: string[]; extract: Array<{ text: string; pendingFact: string | null }>; draft: number; resolve: number };
-  drafts: Array<{
-    revision: number;
-    draftHash: string;
-    dialogue: Array<{ q: string; a: string }>;
-    usage: { inputTokens: number; outputTokens: number; webSearches: number; calls: number };
-  }>;
+  drafts: Array<{ revision: number; draftHash: string; dialogue: Array<{ q: string; a: string }>; usage: LlmUsage }>;
   approvals: Array<{ draftId: string | null; approvalUtterance: string; revisions: number }>;
   feedback: Array<{ sentiment: string; rating: number | null; text: string; categoryKey: string | null }>;
   /** Script the next extraction result(s); consumed in order, then empty facts. */

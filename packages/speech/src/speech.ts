@@ -17,6 +17,8 @@
  *              pipelineResponse[0].audio[0].audioContent (base64 WAV).
  */
 
+import { estimateWavSeconds, recordSarvamUsage } from "@urimai/usage";
+
 export interface SpeechProvider {
   readonly name: string;
   /** Tamil speech → text. `audio` is WAV/PCM (16k mono) after transcode. */
@@ -65,6 +67,7 @@ export class SarvamSpeechProvider implements SpeechProvider {
       body,
     });
     if (!res.ok) throw new Error(`sarvam STT ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    recordSarvamUsage({ sttSeconds: estimateWavSeconds(audio) }); // for cost metering
     const data = (await res.json()) as { transcript?: string };
     return data.transcript ?? "";
   }
@@ -94,6 +97,7 @@ export class SarvamSpeechProvider implements SpeechProvider {
       }),
     });
     if (!res.ok) throw new Error(`sarvam TTS ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    recordSarvamUsage({ ttsChars: t.length }); // metered on the truncated text actually sent
     const data = (await res.json()) as { audios?: string[] };
     const b64 = data.audios?.[0];
     if (!b64) throw new Error("sarvam TTS: no audio returned");

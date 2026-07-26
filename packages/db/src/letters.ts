@@ -4,6 +4,7 @@
  * Phase 6 — the audit contract (nothing delivered without a logged approval) starts now.
  */
 import type { LetterDraft } from "@urimai/types";
+import type { LlmUsage } from "@urimai/usage";
 import { getPrisma } from "./client.js";
 
 export interface DraftLogInput {
@@ -17,8 +18,8 @@ export interface DraftLogInput {
   transcript?: string | null;
   /** Full turn-by-turn Q&A between Madal and the citizen (PII); [] if unavailable. */
   dialogue?: Array<{ q: string; a: string }> | null;
-  /** Cumulative Claude token usage for this letter (for cost attribution). */
-  usage?: { inputTokens: number; outputTokens: number; webSearches: number; calls: number } | null;
+  /** Cumulative usage for this letter (Claude tokens + Sarvam chars/seconds) for cost. */
+  usage?: LlmUsage | null;
 }
 
 /** Persist one draft revision; returns the row id (referenced by the approval). */
@@ -47,6 +48,8 @@ export interface ApprovalLogInput {
   draftHash: string;
   approvalUtterance: string;
   revisions: number;
+  /** Usage as of approval (includes voice spent after the draft was logged, e.g. read-back TTS). */
+  usage?: LlmUsage | null;
 }
 
 /** Persist the user's explicit approval — the precondition for any delivery. */
@@ -60,6 +63,14 @@ export async function saveLetterApproval(input: ApprovalLogInput): Promise<strin
       revisions: input.revisions,
     },
   });
+  // Refresh the approved draft's usage: TTS/STT keep accruing after the draft is logged
+  // (the read-back speaks the whole letter), so approval-time usage is more complete.
+  if (input.usage) {
+    await getPrisma().letterDraft.update({
+      where: { id: input.draftId },
+      data: { llmUsage: input.usage as unknown as object },
+    });
+  }
   return row.id;
 }
 

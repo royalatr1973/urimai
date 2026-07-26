@@ -185,7 +185,7 @@ function renderTiles(s){
   t.push(tile("Negative (7d)", s.negativeLast7d, "recent unhappy feedback", s.negativeLast7d>0?"alert":""));
   t.push(tile("High-revision", s.highRevision, "took 3+ redraws"));
   t.push(tile("No category", s.unmatchedCategory, "fell to generic — taxonomy gap", s.unmatchedCategory>0?"alert":""));
-  if(s.spend) t.push(tile("Claude spend", "₹"+s.spend.inr.toFixed(0), "$"+s.spend.usd.toFixed(2)+" · ~₹"+s.avgCostPerLetter.inr.toFixed(2)+"/letter"));
+  if(s.spend) t.push(tile("Total spend", "₹"+s.spend.total.inr.toFixed(0), "Claude ₹"+s.spend.claude.inr.toFixed(0)+" + Sarvam ₹"+s.spend.sarvam.inr.toFixed(0)+" est · ~₹"+s.avgCostPerLetter.inr.toFixed(2)+"/letter"));
   $("tiles").innerHTML = t.join("");
 }
 
@@ -250,8 +250,9 @@ async function openLetter(letterId, sessionId){
       ["Letter type", esc(L.letterType || "—")],
       ["Redraws", esc(L.revisions)],
       ["Citizen", `<span class="mono">${esc(maskPhone(L.sessionId || sessionId))}</span>`],
-      ["Claude cost", L.cost ? `<span class="mono">₹${L.cost.inr.toFixed(2)} · $${L.cost.usd.toFixed(4)}</span>` : "—"],
-      ["Tokens", L.usage ? `<span class="mono">${(L.usage.inputTokens+L.usage.outputTokens).toLocaleString()} · ${L.usage.calls} calls${L.usage.webSearches?` · ${L.usage.webSearches} web`:""}</span>` : "—"],
+      ["Total cost", L.cost ? `<span class="mono">₹${L.cost.total.inr.toFixed(2)} · $${L.cost.total.usd.toFixed(4)}</span>` : "—"],
+      ["Claude", L.cost ? `<span class="mono">₹${L.cost.claude.inr.toFixed(2)} · ${(L.usage.inputTokens+L.usage.outputTokens).toLocaleString()} tokens · ${L.usage.calls} calls${L.usage.webSearches?` · ${L.usage.webSearches} web`:""}</span>` : "—"],
+      ["Sarvam (est)", L.usage ? `<span class="mono">₹${L.cost.sarvam.inr.toFixed(2)} · ${L.usage.ttsChars.toLocaleString()} chars TTS · ${Math.round(L.usage.sttSeconds)}s STT</span>` : "—"],
     ].map(([k,v]) => `<div><div class="k">${k}</div>${v}</div>`).join("");
     const fb = (L.feedback||[]).map(f =>
       `<div class="fb">${f.rating?`<span class="stars">${stars(f.rating)}</span> `:""}<span class="pill ${f.sentiment==="positive"?"pos":f.sentiment==="negative"?"neg":""}">${esc(f.sentiment)}</span><br>${esc(f.text)}</div>`

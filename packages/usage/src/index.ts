@@ -17,13 +17,28 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 export interface LlmUsage {
+  // Claude (exact — from each response's usage)
   inputTokens: number;
   outputTokens: number;
   webSearches: number;
   calls: number;
+  // Sarvam voice (estimated — Sarvam returns no usage, so measured from what we send it)
+  ttsChars: number; // characters synthesized (TTS)
+  sttSeconds: number; // seconds of audio transcribed (STT)
+  ttsCalls: number;
+  sttCalls: number;
 }
 
-export const EMPTY_USAGE: LlmUsage = { inputTokens: 0, outputTokens: 0, webSearches: 0, calls: 0 };
+export const EMPTY_USAGE: LlmUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  webSearches: 0,
+  calls: 0,
+  ttsChars: 0,
+  sttSeconds: 0,
+  ttsCalls: 0,
+  sttCalls: 0,
+};
 
 const ctx = new AsyncLocalStorage<{ sessionId: string }>();
 const meter = new Map<string, LlmUsage>();
@@ -42,6 +57,22 @@ export function recordUsage(u: { inputTokens?: number; outputTokens?: number; we
   cur.outputTokens += u.outputTokens ?? 0;
   cur.webSearches += u.webSearches ?? 0;
   cur.calls += 1;
+  meter.set(sessionId, cur);
+}
+
+/** Add one Sarvam call's usage (TTS characters or STT audio-seconds) to the session total. */
+export function recordSarvamUsage(u: { ttsChars?: number; sttSeconds?: number }): void {
+  const sessionId = ctx.getStore()?.sessionId;
+  if (!sessionId) return;
+  const cur = meter.get(sessionId) ?? { ...EMPTY_USAGE };
+  if (u.ttsChars) {
+    cur.ttsChars += u.ttsChars;
+    cur.ttsCalls += 1;
+  }
+  if (u.sttSeconds) {
+    cur.sttSeconds += u.sttSeconds;
+    cur.sttCalls += 1;
+  }
   meter.set(sessionId, cur);
 }
 
@@ -77,14 +108,23 @@ export interface CostRates {
   outputPerMillion: number; // USD per 1M output tokens
   perWebSearch: number; // USD per web search request
   usdToInr: number;
+  sarvamTtsPerMillionChars: number; // USD per 1M TTS characters — set from your Sarvam plan
+  sarvamSttPerMinute: number; // USD per minute of STT audio — set from your Sarvam plan
 }
 
-/** Defaults: Claude Opus 4.8 list price + web search; INR at a rough spot rate. */
+/**
+ * Defaults: Claude Opus 4.8 list price + web search; INR at a rough spot rate.
+ * Sarvam rates default to 0 (unconfigured) — Sarvam publishes no per-call cost, so the
+ * operator must enter their real plan rate via SARVAM_* env. Until then usage volume
+ * (chars/seconds) still shows; only the ₹ estimate is zero.
+ */
 export const DEFAULT_RATES: CostRates = {
   inputPerMillion: 5,
   outputPerMillion: 25,
   perWebSearch: 0.01,
   usdToInr: 86,
+  sarvamTtsPerMillionChars: 0,
+  sarvamSttPerMinute: 0,
 };
 
 export interface Cost {
@@ -92,13 +132,40 @@ export interface Cost {
   inr: number;
 }
 
-export function computeCost(u: LlmUsage, rates: Partial<CostRates> = {}): Cost {
-  const r = { ...DEFAULT_RATES, ...rates };
-  const usd =
+export interface CostBreakdown {
+  claude: Cost;
+  sarvam: Cost; // ESTIMATE (0 until Sarvam rates are configured)
+  total: Cost;
+}
+
+function claudeUsd(u: LlmUsage, r: CostRates): number {
+  return (
     (u.inputTokens / 1_000_000) * r.inputPerMillion +
     (u.outputTokens / 1_000_000) * r.outputPerMillion +
-    u.webSearches * r.perWebSearch;
+    u.webSearches * r.perWebSearch
+  );
+}
+function sarvamUsd(u: LlmUsage, r: CostRates): number {
+  return (u.ttsChars / 1_000_000) * r.sarvamTtsPerMillionChars + (u.sttSeconds / 60) * r.sarvamSttPerMinute;
+}
+
+/** Total cost (Claude exact + Sarvam estimate). */
+export function computeCost(u: LlmUsage, rates: Partial<CostRates> = {}): Cost {
+  const r = { ...DEFAULT_RATES, ...rates };
+  const usd = claudeUsd(u, r) + sarvamUsd(u, r);
   return { usd, inr: usd * r.usdToInr };
+}
+
+/** Cost split into Claude (exact) and Sarvam (estimate), plus the total. */
+export function costBreakdown(u: LlmUsage, rates: Partial<CostRates> = {}): CostBreakdown {
+  const r = { ...DEFAULT_RATES, ...rates };
+  const c = claudeUsd(u, r);
+  const s = sarvamUsd(u, r);
+  return {
+    claude: { usd: c, inr: c * r.usdToInr },
+    sarvam: { usd: s, inr: s * r.usdToInr },
+    total: { usd: c + s, inr: (c + s) * r.usdToInr },
+  };
 }
 
 /** Read rate overrides from the environment (all optional; falls back to DEFAULT_RATES). */
@@ -109,9 +176,19 @@ export function ratesFromEnv(env: Record<string, string | undefined> = process.e
   const outp = num(env.LLM_OUTPUT_PER_M);
   const ws = num(env.LLM_PER_WEB_SEARCH);
   const inr = num(env.USD_INR);
+  const stts = num(env.SARVAM_STT_PER_MIN);
+  const ttsc = num(env.SARVAM_TTS_PER_M_CHARS);
   if (inp !== undefined) out.inputPerMillion = inp;
   if (outp !== undefined) out.outputPerMillion = outp;
   if (ws !== undefined) out.perWebSearch = ws;
   if (inr !== undefined) out.usdToInr = inr;
+  if (stts !== undefined) out.sarvamSttPerMinute = stts;
+  if (ttsc !== undefined) out.sarvamTtsPerMillionChars = ttsc;
   return out;
+}
+
+/** Estimate seconds of audio in a 16 kHz mono 16-bit PCM WAV buffer (Sarvam STT input). */
+export function estimateWavSeconds(wav: Buffer | Uint8Array): number {
+  const bytes = wav.length > 44 ? wav.length - 44 : 0; // drop the WAV header
+  return bytes / (16000 * 2); // 16k samples/s × 2 bytes/sample (mono)
 }

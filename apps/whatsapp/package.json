@@ -21,7 +21,8 @@
     "@urimai/speech": "workspace:*",
     "@urimai/types": "workspace:*",
     "@urimai/whatsapp-client": "workspace:*",
-    "fastify": "^5.1.0"
+    "fastify": "^5.1.0",
+    "@urimai/usage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

@@ -12,6 +12,7 @@
  * and re-greets, so a shared phone can hand between apps AND between people.
  */
 import { isHelpRequest, isResetRequest, type EscalationQueue } from "@urimai/escalation";
+import { runWithUsageContext } from "@urimai/usage";
 import type { InboundMessage, WhatsAppClient } from "@urimai/whatsapp-client";
 import type { MadalHandler } from "./madal.js";
 
@@ -90,6 +91,13 @@ export function createAppRouter(deps: RouterDeps) {
   const isBareIntent = (text: string) => text.trim().length <= 25;
 
   async function handleInbound(msg: InboundMessage): Promise<void> {
+    // Meter this whole message — STT (voice → text), the orchestrator's Claude calls, and
+    // TTS (spoken reply) — under the letter's session id, so voice cost attributes to the
+    // right letter. Same key the Madal orchestrator uses (`wa:<phone>`).
+    return runWithUsageContext(`wa:${msg.from}`, () => handleInboundInner(msg));
+  }
+
+  async function handleInboundInner(msg: InboundMessage): Promise<void> {
     const text = await deps.toText(msg);
     if (text === null) {
       await deps.whatsapp.sendText(msg.from, msg.kind === "audio" ? MSG.voiceNotReady : MSG.unsupported);

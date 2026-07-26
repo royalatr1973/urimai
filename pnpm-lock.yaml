@@ -121,6 +121,9 @@ importers:
       '@urimai/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@urimai/usage':
+        specifier: workspace:*
+        version: link:../../packages/usage
       '@urimai/whatsapp-client':
         specifier: workspace:*
         version: link:../../packages/whatsapp-client
@@ -429,6 +432,10 @@ importers:
         version: 2.1.9(@types/node@22.20.0)(terser@5.48.0)
 
   packages/speech:
+    dependencies:
+      '@urimai/usage':
+        specifier: workspace:*
+        version: link:../usage
     devDependencies:
       '@types/node':
         specifier: ^22.9.0

@@ -13,7 +13,7 @@
 import type { FactKey, LetterDraft, LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
 import { missingRequiredFacts, resolveLanguage, resolveLetterType } from "@urimai/letter-types";
 import { draftHash } from "@urimai/docgen";
-import { resetUsage, runWithUsageContext, snapshotUsage } from "@urimai/usage";
+import { resetUsage, runWithUsageContext, snapshotUsage, type LlmUsage } from "@urimai/usage";
 import type { Classification } from "@urimai/letters-extractor";
 import { classifyFeedback } from "./feedback.js";
 import { classifyReviewReply, isDontKnow, isNo, isNoNeed, isYes } from "./intents.js";
@@ -106,7 +106,7 @@ export interface LettersOrchestratorDeps {
     categoryKey: string | null;
     transcript: string | null;
     dialogue: Array<{ q: string; a: string }>;
-    usage: { inputTokens: number; outputTokens: number; webSearches: number; calls: number };
+    usage: LlmUsage;
   }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
   logApproval?: (input: {
@@ -115,6 +115,8 @@ export interface LettersOrchestratorDeps {
     draftHash: string;
     approvalUtterance: string;
     revisions: number;
+    /** Usage as of approval — later than the draft snapshot, so it includes the read-back TTS. */
+    usage: LlmUsage;
   }) => Promise<unknown>;
   /** Persist the end-of-letter feedback ("how did you feel?"). Optional. */
   logFeedback?: (input: {
@@ -439,6 +441,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
           draftHash: hash,
           approvalUtterance: text,
           revisions: state.revisions,
+          usage: snapshotUsage(sessionId),
         });
         await save(sessionId, { ...state, phase: "delivered" });
         return { kind: "deliver", draft: state.draft, draftHash: hash, revisions: state.revisions, prompt: DELIVERED_REVIEW_PROMPT };
@@ -489,6 +492,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
           draftHash: hash,
           approvalUtterance: text,
           revisions: state.revisions,
+          usage: snapshotUsage(sessionId),
         });
         await save(sessionId, { ...state, phase: "feedback" });
         return { kind: "feedback_request", prompt: FEEDBACK_PROMPT };
