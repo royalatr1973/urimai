@@ -112,5 +112,7 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
     logFeedback: (input) => saveLetterFeedback(input),
     ttlSeconds: opts.ttlSeconds,
     revisionCap: opts.revisionCap,
+    // Ask Tamil vs English for the letter when ASK_LETTER_LANGUAGE=on.
+    askLanguage: process.env.ASK_LETTER_LANGUAGE === "on",
   });
 }

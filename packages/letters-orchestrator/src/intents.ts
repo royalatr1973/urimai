@@ -176,3 +176,15 @@ const NO_NEED = new Set(["வேண்டாம்", "வேணாம்", "இ�
 export function isNoNeed(text: string): boolean {
   return NO_NEED.has(normalize(text));
 }
+
+/**
+ * Which letter language the citizen chose. Accepts the tappable button ids ("ta"/"en")
+ * and spoken/typed words in Tamil or English. Null when it's neither (caller defaults).
+ */
+export function parseLanguageChoice(text: string): "ta" | "en" | null {
+  const t = normalize(text);
+  if (!t) return null;
+  if (t === "ta" || /தமிழ|tamil/.test(t)) return "ta";
+  if (t === "en" || /ஆங்கில|இங்கிலீஷ|இங்கிலிஷ|english|inglish/.test(t)) return "en";
+  return null;
+}

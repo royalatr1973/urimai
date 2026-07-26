@@ -16,7 +16,7 @@ import { draftHash } from "@urimai/docgen";
 import { resetUsage, runWithUsageContext, snapshotUsage, type LlmUsage } from "@urimai/usage";
 import type { Classification } from "@urimai/letters-extractor";
 import { classifyFeedback } from "./feedback.js";
-import { classifyReviewReply, isDontKnow, isNo, isNoNeed, isYes } from "./intents.js";
+import { classifyReviewReply, isDontKnow, isNo, isNoNeed, isYes, parseLanguageChoice } from "./intents.js";
 import { chunkChangedReadback, chunkReadback } from "./readback.js";
 import {
   CHANGED_INTRO,
@@ -26,6 +26,7 @@ import {
   LISTEN_PROMPT,
   NO_CHANGE_NEEDED,
   CLOSED_PROMPT,
+  LANGUAGE_PROMPT,
   DELIVERED_REVIEW_PROMPT,
   FEEDBACK_PROMPT,
   POST_DELIVERY_CLARIFY,
@@ -131,11 +132,15 @@ export interface LettersOrchestratorDeps {
   ttlSeconds?: number;
   /** Correction rounds before offering a human (§7.6). */
   revisionCap?: number;
+  /** Ask the citizen to choose Tamil vs English for the letter (ASK_LETTER_LANGUAGE). */
+  askLanguage?: boolean;
 }
 
 export type LetterTurnResult =
   | { kind: "listen"; prompt: LetterQuestion }
   | { kind: "confirm_type"; typeId: string; prompt: LetterQuestion; facts: LetterFacts }
+  /** Ask which language the letter should be written in (Tamil or English). */
+  | { kind: "language_choice"; prompt: LetterQuestion }
   | { kind: "question"; fact: FactKey; question: LetterQuestion; typeId: string; facts: LetterFacts }
   | { kind: "entity_question"; entity: string; question: LetterQuestion; typeId: string; facts: LetterFacts }
   | {
@@ -160,7 +165,7 @@ const DEFAULT_TTL = 60 * 60 * 24;
 const DEFAULT_REVISION_CAP = 5;
 const sessionKey = (id: string) => `madal:session:${id}`;
 
-type Phase = "listening" | "confirming" | "collecting" | "reviewing" | "delivered" | "feedback";
+type Phase = "listening" | "confirming" | "choosing_language" | "collecting" | "reviewing" | "delivered" | "feedback";
 
 interface SessionState {
   phase: Phase;
@@ -563,14 +568,30 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         // Not a bare yes/no — treat as more narration: keep the type, mine the text.
         extra = await deps.extract(text, null);
       }
+      const merged = mergeFacts(state.facts, extra);
+      // Optionally ask the letter's language (Tamil/English) once the type is set — unless
+      // the citizen already made it clear in their narration (facts.language).
+      if (deps.askLanguage && !merged.language) {
+        await save(sessionId, { ...state, phase: "choosing_language", transcript, typeId, facts: merged });
+        return { kind: "language_choice", prompt: LANGUAGE_PROMPT };
+      }
+      const next: SessionState = { ...state, phase: "collecting", transcript, typeId, facts: merged };
+      const type = resolveLetterType(types, typeId);
+      if (!type) throw new Error("letter-type catalogue is empty — cannot proceed");
+      return collectOrDraft(sessionId, next, type);
+    }
+
+    // Language choice reply: set the letter language, then start collecting facts. An
+    // unclear answer defaults to Tamil (the audience's language) rather than re-asking.
+    if (state.phase === "choosing_language") {
+      const lang = parseLanguageChoice(text) ?? "ta";
       const next: SessionState = {
         ...state,
         phase: "collecting",
         transcript,
-        typeId,
-        facts: mergeFacts(state.facts, extra),
+        facts: { ...state.facts, language: lang },
       };
-      const type = resolveLetterType(types, typeId);
+      const type = resolveLetterType(types, next.typeId);
       if (!type) throw new Error("letter-type catalogue is empty — cannot proceed");
       return collectOrDraft(sessionId, next, type);
     }

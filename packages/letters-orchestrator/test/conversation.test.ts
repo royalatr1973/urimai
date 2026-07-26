@@ -254,6 +254,24 @@ describe("full letters conversation", () => {
     expect(seen.at(-1)).toEqual({ survey_number: "214/2B" }); // entities reached the drafter
   });
 
+  it("language choice (askLanguage): after confirm, asks Tamil/English; the pick sets the draft language", async () => {
+    const f = makeFakeDeps("generic_petition", null);
+    const orch = createLettersOrchestrator({ ...f.deps, askLanguage: true });
+    const sid = "lang";
+    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர்" });
+    await orch.handleTurn(sid, "மனு எழுதணும், நான் லட்சுமி, வீட்டுல கஷ்டம்");
+    // "ஆம்" confirms the type → now the language is asked (not the first gap fact).
+    const lang = await orch.handleTurn(sid, "ஆம்");
+    expect(lang.kind).toBe("language_choice");
+    // Tapping "English" (button id "en") sets the letter language; flow proceeds.
+    const after = await orch.handleTurn(sid, "en");
+    expect(after.kind).toBe("question"); // now the gap loop starts (copy_to left)
+    // Decline the copy → read-back; the draft is in English.
+    const rb = await orch.handleTurn(sid, "வேண்டாம்");
+    if (rb.kind !== "readback") throw new Error(`expected readback, got ${rb.kind}`);
+    expect(rb.draft.language).toBe("en");
+  });
+
   it("category found: addressee + copy questions are SKIPPED (To/CC come from its chain)", async () => {
     const f = makeFakeDeps("generic_petition", "drainage_sewage");
     const orch = createLettersOrchestrator(f.deps);

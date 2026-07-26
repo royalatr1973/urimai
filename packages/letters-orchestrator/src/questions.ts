@@ -205,6 +205,13 @@ export const DELIVERED_REVIEW_PROMPT: LetterQuestion = {
   en: "Please read the PDF carefully. If everything is correct, say 'okay' or 'thanks' — the letter is done. If anything should change, tell me what to change and I'll redo and resend it.",
 };
 
+/** Which language to write the letter in — asked (optionally) after the type is confirmed.
+ *  On WhatsApp this is rendered as two tappable choices (Tamil / English). */
+export const LANGUAGE_PROMPT: LetterQuestion = {
+  ta: "கடிதத்தை எந்த மொழியில் வேண்டும் — தமிழா, ஆங்கிலமா?",
+  en: "Which language should the letter be in — Tamil or English?",
+};
+
 /** Asked once the documents are accepted — one short feedback per letter. On WhatsApp
  *  this is rendered as a tappable 5-star list; the wording stays short to suit that. */
 export const FEEDBACK_PROMPT: LetterQuestion = {

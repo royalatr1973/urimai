@@ -44,6 +44,12 @@ function briefReadback(draft: LetterDraft): string {
 
 /** The five star-rating rows (best → worst). ids "5".."1" flow straight into the
  *  letters feedback phase, which reads the digit as the rating. */
+/** Language choice — the tapped id ("ta"/"en") drives the letter language. */
+const LANGUAGE_ROWS: ListRow[] = [
+  { id: "ta", title: "தமிழ்", description: "கடிதம் தமிழில்" },
+  { id: "en", title: "English", description: "Letter in English" },
+];
+
 const STAR_ROWS: ListRow[] = [
   { id: "5", title: "⭐⭐⭐⭐⭐", description: "மிகச் சிறந்தது" },
   { id: "4", title: "⭐⭐⭐⭐", description: "நன்று" },
@@ -65,6 +71,8 @@ const MSG = {
   // Spoken AI disclaimer for brief read-back (full mode gets it as the last letter chunk).
   aiDisclaimer: "இந்தக் கடிதம் AI உதவியுடன் தயாரிக்கப்பட்டது — அனுப்பும் முன் விவரங்களைச் சரிபார்க்கவும்.",
   feedbackButton: "மதிப்பிடுங்கள்",
+  languageButton: "மொழி தேர்வு",
+  languageSection: "கடிதத்தின் மொழி",
   feedbackSection: "நட்சத்திர மதிப்பீடு",
   // Revision cap reached: offer the human path but keep the door open to approve.
   escalateOffer:
@@ -83,6 +91,18 @@ export function createMadalHandler(deps: MadalHandlerDeps) {
         return;
       case "confirm_type":
         await deps.speak(from, r.prompt.ta);
+        return;
+      case "language_choice":
+        // Two tappable choices — the tapped id ("ta"/"en") flows back as text and the
+        // orchestrator sets the letter language. A spoken/typed reply still works.
+        await deps.speak(from, r.prompt.ta);
+        try {
+          await deps.whatsapp.sendInteractiveList(from, r.prompt.ta, MSG.languageButton, LANGUAGE_ROWS, {
+            sectionTitle: MSG.languageSection,
+          });
+        } catch (err) {
+          console.error("[madal] language list send failed:", err instanceof Error ? err.message : err);
+        }
         return;
       case "question":
       case "entity_question":

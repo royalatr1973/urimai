@@ -40,7 +40,7 @@ export function fakeDraft(
     closing: "நன்றி.",
     signatureLine: `இப்படிக்கு,\n${facts.sender_name ?? "________"}`,
     copyTo: cc.length > 0 ? cc.join("\n") : null,
-    language: "ta",
+    language: facts.language ?? "ta",
   };
 }
 
