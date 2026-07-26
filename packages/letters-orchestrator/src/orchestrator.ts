@@ -381,7 +381,18 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     }
 
     const last = missing.filter((f) => LAST.includes(f));
-    if (last.length > 0) return askFact(last[0]!);
+    if (last.length > 0) {
+      // When a grievance category matched, its escalation chain already gives the To/CC —
+      // don't make the citizen answer "who to send it to / who to copy". Auto-skip those
+      // (so resolveAddressee fills them from the category) and go straight to the draft.
+      // Only ask when NO category was found (generic petition — nothing to resolve from).
+      if (state.categoryId) {
+        state = { ...state, skipped: [...state.skipped, ...last] };
+        await save(sessionId, state);
+      } else {
+        return askFact(last[0]!);
+      }
+    }
 
     return produceDraft(sessionId, state, type);
   }

@@ -33,7 +33,8 @@ describe("mergeFacts — nothing the user says is lost", () => {
 
 describe("full letters conversation", () => {
   it("drives narration → confirm → gap loop → readback → correction → approval", async () => {
-    const f = makeFakeDeps("police_complaint");
+    // No grievance category (generic path) — so the addressee + copy questions ARE asked.
+    const f = makeFakeDeps("police_complaint", null);
     const orch = createLettersOrchestrator(f.deps);
     const sid = "t1";
 
@@ -150,13 +151,13 @@ describe("full letters conversation", () => {
     if (t8.kind !== "closed") throw new Error("unreachable");
     expect(f.feedback).toHaveLength(1);
     expect(f.feedback[0]!.sentiment).toBe("positive");
-    expect(f.feedback[0]!.categoryKey).toBe("test_category");
+    expect(f.feedback[0]!.categoryKey).toBeNull(); // generic path — no category
     expect(f.feedback[0]!.text).toContain("நல்லா");
     expect(await orch.isNewSession(sid)).toBe(true);
   });
 
   it("post-delivery correction: redo and re-deliver, then close on the next OK", async () => {
-    const f = makeFakeDeps("generic_petition");
+    const f = makeFakeDeps("generic_petition", null);
     const orch = createLettersOrchestrator(f.deps);
     const sid = "postfix";
     f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
@@ -197,7 +198,7 @@ describe("full letters conversation", () => {
   });
 
   it("copy question: 'தெரியலை' → searched CC; later 'நகல் வேண்டாம்' at read-back removes it", async () => {
-    const f = makeFakeDeps("generic_petition");
+    const f = makeFakeDeps("generic_petition", null);
     const orch = createLettersOrchestrator(f.deps);
     const sid = "cc";
     f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்" });
@@ -246,18 +247,30 @@ describe("full letters conversation", () => {
     expect(e2.entity).toBe("village");
     expect(f.calls.extract.length).toBe(extractCallsBefore);
 
-    // "தெரியலை" skips the entity; flow proceeds to the copy question.
-    const q = await orch.handleTurn(sid, "தெரியலை");
-    if (q.kind !== "question") throw new Error(`expected question, got ${q.kind}`);
-    expect(q.fact).toBe("copy_to");
-
-    const rb = await orch.handleTurn(sid, "வேண்டாம்");
+    // "தெரியலை" skips the entity; a category matched, so the addressee + copy questions are
+    // NOT asked (its chain provides To/CC) — the flow goes straight to the read-back.
+    const rb = await orch.handleTurn(sid, "தெரியலை");
     if (rb.kind !== "readback") throw new Error(`expected readback, got ${rb.kind}`);
     expect(seen.at(-1)).toEqual({ survey_number: "214/2B" }); // entities reached the drafter
   });
 
+  it("category found: addressee + copy questions are SKIPPED (To/CC come from its chain)", async () => {
+    const f = makeFakeDeps("generic_petition", "drainage_sewage");
+    const orch = createLettersOrchestrator(f.deps);
+    const sid = "cat";
+    // Story facts complete in one go — no addressee/copy stated by the citizen.
+    f.queueExtract({ sender_name: "லட்சுமி", sender_address: "கடலூர்", incident_place: "தெரு", incident_details: "சாக்கடை" });
+    await orch.handleTurn(sid, "சாக்கடை பிரச்சனை, மனு எழுதணும், நான் லட்சுமி, கடலூர்");
+    const rb = await orch.handleTurn(sid, "ஆம்");
+    // Went straight to the read-back — the citizen was NEVER asked who to send it to / copy.
+    expect(rb.kind).toBe("readback");
+    if (rb.kind !== "readback") throw new Error("unreachable");
+    expect(f.calls.resolve).toBe(1); // To/CC resolved once, from the category chain
+    expect(rb.draft.addresseeBlock).toBe("தேடல்-அலுவலகம்"); // filled from the category, not asked
+  });
+
   it("copy question: 'வேண்டாம்' means NO copy — nothing searched, நகல் line absent", async () => {
-    const f = makeFakeDeps("generic_petition");
+    const f = makeFakeDeps("generic_petition", null);
     const orch = createLettersOrchestrator(f.deps);
     const sid = "nocc";
     f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });

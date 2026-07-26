@@ -17,13 +17,18 @@ describe("classifyLetter", () => {
     expect(r.letterTypeId).toBe("police_complaint");
   });
 
-  it("sends the catalogue (ids from data, fallback marked) and the narration to the model", async () => {
+  it("caches the catalogue in the system block and sends the narration in the message", async () => {
     const client = reply('{"letterTypeId":"rti_request","language":null}');
     await classifyLetter("I want to know the status of my ration card application", SEED_LETTER_TYPES, { client });
     const call = (client.messages.create as ReturnType<typeof vi.fn>).mock.calls[0]![0];
-    for (const t of SEED_LETTER_TYPES) expect(call.messages[0].content).toContain(`- ${t.id}: `);
-    expect(call.messages[0].content).toContain("(FALLBACK)");
+    // The static catalogue → a cached system block (prompt caching).
+    const sys = (call.system as Array<{ text: string; cache_control?: unknown }>)[0]!;
+    expect(sys.cache_control).toEqual({ type: "ephemeral" });
+    for (const t of SEED_LETTER_TYPES) expect(sys.text).toContain(`- ${t.id}: `);
+    expect(sys.text).toContain("(FALLBACK)");
+    // The variable narration stays in the user message (kept out of the cache prefix).
     expect(call.messages[0].content).toContain("ration card application");
+    expect(call.messages[0].content).not.toContain("- rti_request: ");
   });
 
   it("hallucinated ids, API failures, and empty input all fall back to the generic petition", async () => {

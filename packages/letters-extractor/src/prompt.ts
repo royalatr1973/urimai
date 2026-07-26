@@ -36,11 +36,29 @@ export function buildClassifyUserPrompt(
   fallbackId: string,
   categoryIds: string[] = [],
 ): string {
+  return `${buildClassifyReference(types, fallbackId, categoryIds)}\n\n${buildClassifyQuestion(text)}`;
+}
+
+/**
+ * The STATIC part of the classify prompt — letter types + the 300 grievance categories.
+ * Identical every call, so it is sent as a cached system block (prompt caching): the big
+ * category list is billed at ~10% on cache hits instead of full price every time.
+ */
+export function buildClassifyReference(
+  types: Pick<LetterType, "id" | "nameEnglish" | "nameTamil">[],
+  fallbackId: string,
+  categoryIds: string[] = [],
+): string {
   const list = types
     .map((t) => `- ${t.id}: ${t.nameEnglish} / ${t.nameTamil}${t.id === fallbackId ? "  (FALLBACK)" : ""}`)
     .join("\n");
   const cats = categoryIds.length > 0 ? `\n\nGrievance categories (pick the most specific, or null):\n${categoryIds.join(", ")}` : "";
-  return `Available letter types:\n${list}${cats}\n\nPerson's words:\n"""\n${text}\n"""\n\nReturn the JSON classification object now.`;
+  return `Available letter types:\n${list}${cats}`;
+}
+
+/** The VARIABLE part — just this person's words (kept out of the cached prefix). */
+export function buildClassifyQuestion(text: string): string {
+  return `Person's words:\n"""\n${text}\n"""\n\nReturn the JSON classification object now.`;
 }
 
 // --- fact extraction ---------------------------------------------------------

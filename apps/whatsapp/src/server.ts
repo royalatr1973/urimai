@@ -76,6 +76,8 @@ function buildHandler(): { handler: AppRouter | null; reason?: string } {
       makeDocx: (draft) => draftToDocx(draft),
       onComplete: (from) => Promise.resolve(router.clearRoute(from)).then(() => undefined),
       helplineText: env.HELPLINE_TEXT,
+      // READBACK_STYLE=brief speaks a one-line summary instead of the whole letter (saves TTS).
+      readbackBrief: env.READBACK_STYLE === "brief",
     });
 
     const redis = getRedis();

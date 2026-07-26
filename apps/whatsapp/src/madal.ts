@@ -31,6 +31,15 @@ export interface MadalHandlerDeps {
   onComplete?: (from: string) => Promise<void>;
   now?: () => string;
   helplineText?: string;
+  /** READBACK_STYLE=brief: speak a one-line summary instead of the full letter (saves Sarvam TTS). */
+  readbackBrief?: boolean;
+}
+
+/** A short spoken summary of the letter for brief read-back mode (what it's about, to whom). */
+function briefReadback(draft: LetterDraft): string {
+  const to = (draft.addresseeBlock ?? "").split("\n")[0]?.trim() || "சம்பந்தப்பட்ட அலுவலர்";
+  const subject = (draft.subject ?? "").trim() || "உங்கள் புகார்";
+  return `உங்கள் கடிதம் தயார். ${to} அவர்களுக்கு, "${subject}" என்ற தலைப்பில் எழுதியுள்ளேன்.`;
 }
 
 /** The five star-rating rows (best → worst). ids "5".."1" flow straight into the
@@ -53,6 +62,8 @@ const MSG = {
   // Spoken nudge alongside the star buttons — the audience is voice-first, so we say
   // "tap the stars below" rather than leaving a low-literacy user to read it.
   feedbackNudge: "இந்தச் சேவை உங்களுக்கு எப்படி இருந்தது? கீழே உள்ள நட்சத்திரங்களைத் தட்டி மதிப்பிடுங்கள்.",
+  // Spoken AI disclaimer for brief read-back (full mode gets it as the last letter chunk).
+  aiDisclaimer: "இந்தக் கடிதம் AI உதவியுடன் தயாரிக்கப்பட்டது — அனுப்பும் முன் விவரங்களைச் சரிபார்க்கவும்.",
   feedbackButton: "மதிப்பிடுங்கள்",
   feedbackSection: "நட்சத்திர மதிப்பீடு",
   // Revision cap reached: offer the human path but keep the door open to approve.
@@ -81,8 +92,16 @@ export function createMadalHandler(deps: MadalHandlerDeps) {
         await deps.speak(from, r.prompt.ta);
         return;
       case "readback":
-        // The full letter, spoken in TTS-safe chunks, then the change-or-okay question.
-        for (const chunk of r.chunks) await deps.speak(from, chunk);
+        // FULL: speak the whole letter in TTS-safe chunks (best for trust / low-literacy).
+        // BRIEF: speak only a one-line summary + the AI disclaimer — cuts the read-back TTS,
+        // which is the single biggest Sarvam cost (~89% of voice spend). They still get the
+        // full PDF. Toggle with READBACK_STYLE=brief. Either way, the change-or-okay prompt.
+        if (deps.readbackBrief) {
+          await deps.speak(from, briefReadback(r.draft));
+          await deps.speak(from, MSG.aiDisclaimer);
+        } else {
+          for (const chunk of r.chunks) await deps.speak(from, chunk);
+        }
         await deps.speak(from, r.prompt.ta);
         return;
       case "deliver": {

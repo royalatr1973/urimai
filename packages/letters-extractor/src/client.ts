@@ -6,12 +6,15 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 
+/** A system prompt: a plain string, or text blocks (so a stable prefix can be cached). */
+export type SystemPrompt = string | Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }>;
+
 export interface LettersClient {
   messages: {
     create(args: {
       model: string;
       max_tokens: number;
-      system: string;
+      system: SystemPrompt;
       messages: Array<{ role: "user"; content: string }>;
     }): Promise<{ content: Array<{ type: string; text?: string }> }>;
   };

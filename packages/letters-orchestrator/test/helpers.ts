@@ -55,7 +55,7 @@ export interface FakeDeps {
   queueExtract: (...facts: Partial<LetterFacts>[]) => void;
 }
 
-export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
+export function makeFakeDeps(classifyAs = "police_complaint", categoryId: string | null = "test_category"): FakeDeps {
   const store = memoryStore();
   const extractQueue: Partial<LetterFacts>[] = [];
   const calls: FakeDeps["calls"] = { classify: [], extract: [], draft: 0, resolve: 0 };
@@ -69,7 +69,7 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
     loadTypes: async () => SEED_LETTER_TYPES,
     classify: async (text) => {
       calls.classify.push(text);
-      return { letterTypeId: classifyAs, categoryId: "test_category", language: null };
+      return { letterTypeId: classifyAs, categoryId, language: null };
     },
     extract: async (text, pendingFact) => {
       calls.extract.push({ text, pendingFact });

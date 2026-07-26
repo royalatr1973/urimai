@@ -18,7 +18,7 @@ const draft: LetterDraft = {
   language: "ta",
 };
 
-function makeHandler() {
+function makeHandler(over: Record<string, unknown> = {}) {
   const spoken: string[] = [];
   const orchestrator = {
     handleTurn: vi.fn<(s: string, t: string) => Promise<LetterTurnResult>>(),
@@ -44,6 +44,7 @@ function makeHandler() {
     makeDocx: vi.fn(async () => Buffer.from("PKfake")),
     onComplete,
     now: () => "2026-07-19T00:00:00Z",
+    ...over,
   });
   return { handler, orchestrator, whatsapp, escalation, spoken, onComplete };
 }
@@ -62,6 +63,24 @@ describe("Madal WhatsApp renderer", () => {
     await handler.handleText("911", "காமராஜர் தெரு");
     expect(orchestrator.handleTurn).toHaveBeenCalledWith("wa:911", "காமராஜர் தெரு");
     expect(spoken).toEqual(["பகுதி ஒன்று", "பகுதி இரண்டு", "சரியா?"]);
+  });
+
+  it("brief read-back speaks a summary + disclaimer, NOT the full letter chunks (Sarvam TTS saver)", async () => {
+    const { handler, orchestrator, spoken } = makeHandler({ readbackBrief: true });
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "readback",
+      draft: { ...draft, subject: "சாக்கடை", addresseeBlock: "ஆணையர்" },
+      chunks: ["முழு கடிதம் பகுதி ஒன்று", "முழு கடிதம் பகுதி இரண்டு"],
+      revisions: 0,
+      prompt: { ta: "சரியா?", en: "Okay?" },
+      changedOnly: false,
+    });
+    await handler.handleText("911", "சரி");
+    const said = spoken.join(" ");
+    expect(said).toContain("சாக்கடை"); // the summary names the subject
+    expect(said).not.toContain("முழு கடிதம்"); // the full letter chunks are NOT spoken
+    expect(said).toContain("AI"); // disclaimer spoken
+    expect(said).toContain("சரியா?"); // still asks okay-or-change
   });
 
   it("deliver sends .pdf AND .docx, asks the user to review them, and does NOT close yet", async () => {

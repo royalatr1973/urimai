@@ -31,17 +31,22 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
     set: (key, value, mode, ttl) => redis.set(key, value, mode, ttl),
     del: (key) => redis.del(key),
   };
+  // Cheap model for classify/extract (drafting keeps the strong ANTHROPIC_MODEL).
+  const fastModel = process.env.ANTHROPIC_FAST_MODEL ?? "claude-haiku-4-5";
 
   return createLettersOrchestrator({
     store,
     loadTypes: () => listLatestLetterTypes(),
+    // Cost control (July 2026): classify + extract are structured, narrow tasks — run them
+    // on the cheap fast model (Haiku by default), keeping the strong ANTHROPIC_MODEL only
+    // for the quality-sensitive drafting. Override with ANTHROPIC_FAST_MODEL.
     // Classification also picks the curator grievance category (300-way) — its
     // escalation chain then decides the To/CC designations below.
     classify: async (text, types) => {
       const categories = await listLatestGrievanceCategories();
-      return classifyLetter(text, types, {}, categories.map((c) => c.id));
+      return classifyLetter(text, types, { model: fastModel }, categories.map((c) => c.id));
     },
-    extract: (text, pendingFact) => extractLetterFacts(text, { pendingFact }),
+    extract: (text, pendingFact) => extractLetterFacts(text, { pendingFact, model: fastModel }),
     draft: async (type, facts, req) => {
       const r = await draftLetter(type, facts, {
         language: req.language,

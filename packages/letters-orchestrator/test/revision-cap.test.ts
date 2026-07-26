@@ -4,7 +4,7 @@ import { makeFakeDeps } from "./helpers.js";
 
 describe("revision cap (§7.6 — cap at N, then offer escalation)", () => {
   it("allows N corrections, escalates on the N+1th, and still lets the user approve", async () => {
-    const f = makeFakeDeps("generic_petition");
+    const f = makeFakeDeps("generic_petition", null); // no category → addressee + copy asked
     const orch = createLettersOrchestrator({ ...f.deps, revisionCap: 2 });
     const sid = "cap";
 

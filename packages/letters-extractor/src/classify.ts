@@ -6,7 +6,7 @@
 import type { LetterType } from "@urimai/types";
 import { recordAnthropicUsage } from "@urimai/usage";
 import { firstText, resolveClient, resolveModel, type CallOptions } from "./client.js";
-import { buildClassifyUserPrompt, CLASSIFY_SYSTEM_PROMPT } from "./prompt.js";
+import { buildClassifyQuestion, buildClassifyReference, CLASSIFY_SYSTEM_PROMPT } from "./prompt.js";
 import { parseClassification, type Classification } from "./schema.js";
 
 export const GENERIC_FALLBACK_ID = "generic_petition";
@@ -29,8 +29,16 @@ export async function classifyLetter(
     const msg = await resolveClient(opts).messages.create({
       model: resolveModel(opts),
       max_tokens: 256,
-      system: CLASSIFY_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: buildClassifyUserPrompt(text, types, GENERIC_FALLBACK_ID, categoryIds) }],
+      // Static instructions + letter types + 300 categories → one cached system block.
+      // The variable citizen text stays in the user message so the cache prefix is stable.
+      system: [
+        {
+          type: "text",
+          text: `${CLASSIFY_SYSTEM_PROMPT}\n\n${buildClassifyReference(types, GENERIC_FALLBACK_ID, categoryIds)}`,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: buildClassifyQuestion(text) }],
     });
     recordAnthropicUsage((msg as { usage?: Parameters<typeof recordAnthropicUsage>[0] }).usage);
     return parseClassification(firstText(msg), types.map((t) => t.id), GENERIC_FALLBACK_ID, categoryIds);
