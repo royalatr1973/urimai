@@ -102,6 +102,10 @@ describe("full letters conversation", () => {
     expect(answers).toContain("நேத்து ராத்திரி");
     expect(f.drafts[0]!.dialogue.some((t) => t.q.length > 0)).toBe(true); // Madal's questions captured too
 
+    // Claude token usage is metered per letter and snapshotted onto the draft (for cost).
+    expect(f.drafts[0]!.usage.outputTokens).toBeGreaterThan(0);
+    expect(f.drafts[0]!.usage.calls).toBeGreaterThan(0);
+
     // Turn 5a — an ambiguous reply gets ONE clarifying question: no re-draft, no
     // revision burnt, no re-read (live-tester fix — the old loop re-read everything).
     const t5a = await orch.handleTurn(sid, "ம்ம் அது வந்து");

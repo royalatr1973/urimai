@@ -185,6 +185,7 @@ function renderTiles(s){
   t.push(tile("Negative (7d)", s.negativeLast7d, "recent unhappy feedback", s.negativeLast7d>0?"alert":""));
   t.push(tile("High-revision", s.highRevision, "took 3+ redraws"));
   t.push(tile("No category", s.unmatchedCategory, "fell to generic — taxonomy gap", s.unmatchedCategory>0?"alert":""));
+  if(s.spend) t.push(tile("Claude spend", "₹"+s.spend.inr.toFixed(0), "$"+s.spend.usd.toFixed(2)+" · ~₹"+s.avgCostPerLetter.inr.toFixed(2)+"/letter"));
   $("tiles").innerHTML = t.join("");
 }
 
@@ -203,10 +204,11 @@ function renderList(rows, total){
       <td>${esc(r.subject || "—")}</td>
       <td style="text-align:center">${r.revisions>=3?`<span class="pill warn">${r.revisions}</span>`:r.revisions}</td>
       <td>${sentimentPill(r)}</td>
+      <td class="mono" style="text-align:right">${r.cost ? "₹"+r.cost.inr.toFixed(2) : "—"}</td>
       <td class="mono">${esc(maskPhone(r.sessionId))}</td>
     </tr>`).join("");
   $("listWrap").innerHTML = `<table>
-    <thead><tr><th>Delivered</th><th>Category</th><th>Subject</th><th>Redraws</th><th>Feedback</th><th>Citizen</th></tr></thead>
+    <thead><tr><th>Delivered</th><th>Category</th><th>Subject</th><th>Redraws</th><th>Feedback</th><th style="text-align:right">Cost</th><th>Citizen</th></tr></thead>
     <tbody>${body}</tbody></table>
     <p class="muted mono" style="margin-top:10px">${rows.length} of ${total} shown</p>`;
 }
@@ -248,6 +250,8 @@ async function openLetter(letterId, sessionId){
       ["Letter type", esc(L.letterType || "—")],
       ["Redraws", esc(L.revisions)],
       ["Citizen", `<span class="mono">${esc(maskPhone(L.sessionId || sessionId))}</span>`],
+      ["Claude cost", L.cost ? `<span class="mono">₹${L.cost.inr.toFixed(2)} · $${L.cost.usd.toFixed(4)}</span>` : "—"],
+      ["Tokens", L.usage ? `<span class="mono">${(L.usage.inputTokens+L.usage.outputTokens).toLocaleString()} · ${L.usage.calls} calls${L.usage.webSearches?` · ${L.usage.webSearches} web`:""}</span>` : "—"],
     ].map(([k,v]) => `<div><div class="k">${k}</div>${v}</div>`).join("");
     const fb = (L.feedback||[]).map(f =>
       `<div class="fb">${f.rating?`<span class="stars">${stars(f.rating)}</span> `:""}<span class="pill ${f.sentiment==="positive"?"pos":f.sentiment==="negative"?"neg":""}">${esc(f.sentiment)}</span><br>${esc(f.text)}</div>`

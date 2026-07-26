@@ -27,7 +27,8 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@urimai/types": "workspace:*"
+    "@urimai/types": "workspace:*",
+    "@urimai/usage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

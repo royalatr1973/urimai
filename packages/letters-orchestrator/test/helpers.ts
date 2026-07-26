@@ -4,6 +4,7 @@
  */
 import type { LetterDraft, LetterFacts, LetterType } from "@urimai/types";
 import { SEED_LETTER_TYPES } from "@urimai/letter-types";
+import { recordUsage } from "@urimai/usage";
 import type { LettersOrchestratorDeps, SessionStore } from "../src/orchestrator.js";
 
 export function memoryStore(): SessionStore & { map: Map<string, string> } {
@@ -47,7 +48,12 @@ export interface FakeDeps {
   deps: LettersOrchestratorDeps;
   store: ReturnType<typeof memoryStore>;
   calls: { classify: string[]; extract: Array<{ text: string; pendingFact: string | null }>; draft: number; resolve: number };
-  drafts: Array<{ revision: number; draftHash: string; dialogue: Array<{ q: string; a: string }> }>;
+  drafts: Array<{
+    revision: number;
+    draftHash: string;
+    dialogue: Array<{ q: string; a: string }>;
+    usage: { inputTokens: number; outputTokens: number; webSearches: number; calls: number };
+  }>;
   approvals: Array<{ draftId: string | null; approvalUtterance: string; revisions: number }>;
   feedback: Array<{ sentiment: string; rating: number | null; text: string; categoryKey: string | null }>;
   /** Script the next extraction result(s); consumed in order, then empty facts. */
@@ -77,6 +83,9 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
     },
     draft: async (type, facts, req) => {
       calls.draft += 1;
+      // Simulate the real drafter's Claude spend so the usage meter has something to
+      // accumulate — the orchestrator runs the turn inside a usage context.
+      recordUsage({ inputTokens: 800, outputTokens: 300 });
       // A CC-only instruction leaves the body untouched (like the real drafter, which
       // is told to apply ONLY the requested change).
       const note =
@@ -93,7 +102,7 @@ export function makeFakeDeps(classifyAs = "police_complaint"): FakeDeps {
       };
     },
     logDraft: async (input) => {
-      drafts.push({ revision: input.revision, draftHash: input.draftHash, dialogue: input.dialogue });
+      drafts.push({ revision: input.revision, draftHash: input.draftHash, dialogue: input.dialogue, usage: input.usage });
       return `draft-${++draftSeq}`;
     },
     logApproval: async (input) => {

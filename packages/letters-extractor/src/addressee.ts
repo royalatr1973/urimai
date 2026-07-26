@@ -13,6 +13,7 @@
  *    caller falls back to the curator directory. This call never throws.
  */
 import type { LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
+import { recordAnthropicUsage } from "@urimai/usage";
 import Anthropic from "@anthropic-ai/sdk";
 
 /** Official domains searches are limited to AND sources are validated against. */
@@ -204,6 +205,7 @@ export async function searchAddressee(
         },
       ],
     });
+    recordAnthropicUsage((response as { usage?: Parameters<typeof recordAnthropicUsage>[0] }).usage);
 
     // Server-tool loops can pause; resume by echoing the assistant turn (bounded).
     for (let i = 0; i < 3 && response.stop_reason === "pause_turn"; i++) {
@@ -217,6 +219,7 @@ export async function searchAddressee(
           { type: "web_search_20260209", name: "web_search", max_uses: 5, allowed_domains: OFFICIAL_DOMAINS },
         ],
       });
+      recordAnthropicUsage((response as { usage?: Parameters<typeof recordAnthropicUsage>[0] }).usage);
     }
 
     return parseAddresseeSearch(collectText(response.content));

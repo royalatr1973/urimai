@@ -13,6 +13,7 @@
 import type { FactKey, LetterDraft, LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
 import { missingRequiredFacts, resolveLanguage, resolveLetterType } from "@urimai/letter-types";
 import { draftHash } from "@urimai/docgen";
+import { resetUsage, runWithUsageContext, snapshotUsage } from "@urimai/usage";
 import type { Classification } from "@urimai/letters-extractor";
 import { classifyFeedback } from "./feedback.js";
 import { classifyReviewReply, isDontKnow, isNo, isNoNeed, isYes } from "./intents.js";
@@ -105,6 +106,7 @@ export interface LettersOrchestratorDeps {
     categoryKey: string | null;
     transcript: string | null;
     dialogue: Array<{ q: string; a: string }>;
+    usage: { inputTokens: number; outputTokens: number; webSearches: number; calls: number };
   }) => Promise<string>;
   /** Persist the explicit approval — REQUIRED before any channel delivers documents. */
   logApproval?: (input: {
@@ -298,6 +300,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
           categoryKey: state.categoryId,
           transcript: state.transcript || null,
           dialogue: state.dialogue,
+          usage: snapshotUsage(sessionId),
         })
       : null;
     const next: SessionState = { ...state, phase, pendingFact: null, draft, draftId };
@@ -402,7 +405,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     } catch {
       /* dialogue capture is non-essential — proceed with the turn */
     }
-    const result = await runTurn(sessionId, text);
+    const result = await runWithUsageContext(sessionId, () => runTurn(sessionId, text));
     if (result.kind !== "closed" && result.kind !== "escalate") {
       try {
         const post = await load(sessionId);
@@ -527,6 +530,7 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
         text: text.trim(),
       });
       await deps.store.del(sessionKey(sessionId)); // done — next contact starts fresh
+      resetUsage(sessionId); // letter finished — clear its cost meter
       return { kind: "closed", prompt: CLOSED_PROMPT };
     }
 
@@ -638,11 +642,13 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
   /** Fresh conversation, no user text yet: the §7.2 listen prompt. */
   async function startSession(sessionId: string): Promise<LetterTurnResult> {
     // Seed lastPrompt so the citizen's first reply is paired with the opening question.
+    resetUsage(sessionId); // fresh letter — start its cost meter from zero
     await save(sessionId, { ...structuredClone(EMPTY_STATE), lastPrompt: LISTEN_PROMPT.ta });
     return { kind: "listen", prompt: LISTEN_PROMPT };
   }
 
   async function resetSession(sessionId: string): Promise<void> {
+    resetUsage(sessionId);
     await deps.store.del(sessionKey(sessionId));
   }
 

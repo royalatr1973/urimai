@@ -6,6 +6,7 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import type { LetterDraft, LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
+import { recordAnthropicUsage } from "@urimai/usage";
 import { buildFallbackBody } from "./fallback.js";
 import { checkBodyAgainstFacts } from "./guard.js";
 import { buildDraftUserPrompt, DRAFT_SYSTEM_PROMPT, type CorrectionContext } from "./prompt.js";
@@ -130,6 +131,7 @@ export async function draftLetter(type: LetterType, facts: LetterFacts, opts: Dr
         },
       ],
     });
+    recordAnthropicUsage((msg as { usage?: Parameters<typeof recordAnthropicUsage>[0] }).usage);
     const parsed = parseDraftOutput(firstText(msg));
     const userWords = [opts.transcript ?? "", ...Object.values(opts.entities ?? {})].join("\n");
     if (parsed.bodyParagraphs) {

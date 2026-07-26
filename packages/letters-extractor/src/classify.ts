@@ -4,6 +4,7 @@
  * classification can never turn a user away (LETTERS_BRIEF §1).
  */
 import type { LetterType } from "@urimai/types";
+import { recordAnthropicUsage } from "@urimai/usage";
 import { firstText, resolveClient, resolveModel, type CallOptions } from "./client.js";
 import { buildClassifyUserPrompt, CLASSIFY_SYSTEM_PROMPT } from "./prompt.js";
 import { parseClassification, type Classification } from "./schema.js";
@@ -31,6 +32,7 @@ export async function classifyLetter(
       system: CLASSIFY_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildClassifyUserPrompt(text, types, GENERIC_FALLBACK_ID, categoryIds) }],
     });
+    recordAnthropicUsage((msg as { usage?: Parameters<typeof recordAnthropicUsage>[0] }).usage);
     return parseClassification(firstText(msg), types.map((t) => t.id), GENERIC_FALLBACK_ID, categoryIds);
   } catch (err) {
     console.warn(

@@ -25,7 +25,8 @@
     "@urimai/letter-types": "workspace:*",
     "@urimai/letters-drafter": "workspace:*",
     "@urimai/letters-extractor": "workspace:*",
-    "@urimai/types": "workspace:*"
+    "@urimai/types": "workspace:*",
+    "@urimai/usage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

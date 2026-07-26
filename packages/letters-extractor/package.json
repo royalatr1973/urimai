@@ -22,7 +22,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
     "@urimai/types": "workspace:*",
-    "zod": "^3.25.0"
+    "zod": "^3.25.0",
+    "@urimai/usage": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

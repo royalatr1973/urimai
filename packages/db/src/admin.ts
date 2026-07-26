@@ -11,9 +11,16 @@
  * the feedback-to-letter windowing are done in JS; revisit if the tables grow large.
  */
 import type { LetterDraft } from "@urimai/types";
+import { computeCost, EMPTY_USAGE, ratesFromEnv, type Cost, type LlmUsage } from "@urimai/usage";
 import { getPrisma } from "./client.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Cost of a stored llmUsage blob at the current (env-configurable) rates. */
+function costOf(usage: unknown): { usage: LlmUsage; cost: Cost } {
+  const u = { ...EMPTY_USAGE, ...((usage ?? {}) as Partial<LlmUsage>) };
+  return { usage: u, cost: computeCost(u, ratesFromEnv()) };
+}
 
 interface DeliveredLetter {
   draftId: string;
@@ -86,6 +93,8 @@ export interface AdminSummary {
   highRevision: number; // delivered letters that took >= 3 correction loops
   unmatchedCategory: number; // delivered letters that matched no grievance category
   topCategories: Array<{ category: string; count: number }>;
+  spend: { usd: number; inr: number }; // total Claude spend across delivered letters
+  avgCostPerLetter: { usd: number; inr: number };
 }
 
 export async function getAdminSummary(now: Date = new Date()): Promise<AdminSummary> {
@@ -102,14 +111,20 @@ export async function getAdminSummary(now: Date = new Date()): Promise<AdminSumm
   let deliveredLast7d = 0;
   let highRevision = 0;
   let unmatchedCategory = 0;
+  let spendUsd = 0;
   const catCounts = new Map<string, number>();
   for (const L of all) {
     if (L.approvedAt >= cutoff) deliveredLast7d += 1;
     if (L.revisions >= 3) highRevision += 1;
+    spendUsd += costOf(draftById.get(L.draftId)?.llmUsage).cost.usd;
     const cat = draftById.get(L.draftId)?.categoryKey ?? fbByDraft.get(L.draftId)?.[0]?.categoryKey ?? null;
     if (!cat) unmatchedCategory += 1;
     else catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1);
   }
+  const inr = ratesFromEnv().usdToInr ?? 86;
+  const spend = { usd: spendUsd, inr: spendUsd * inr };
+  const avgUsd = all.length > 0 ? spendUsd / all.length : 0;
+  const avgCostPerLetter = { usd: avgUsd, inr: avgUsd * inr };
   const topCategories = [...catCounts.entries()]
     .map(([category, count]) => ({ category, count }))
     .sort((a, b) => b.count - a.count)
@@ -139,6 +154,8 @@ export async function getAdminSummary(now: Date = new Date()): Promise<AdminSumm
     highRevision,
     unmatchedCategory,
     topCategories,
+    spend,
+    avgCostPerLetter,
   };
 }
 
@@ -153,6 +170,7 @@ export interface AdminLetterRow {
   rating: number | null;
   sentiment: string | null;
   hasFeedback: boolean;
+  cost: { usd: number; inr: number }; // exact Claude cost for this letter
 }
 
 export async function listAdminLetters(opts: { limit?: number; offset?: number } = {}): Promise<{
@@ -185,6 +203,7 @@ export async function listAdminLetters(opts: { limit?: number; offset?: number }
       rating: f?.rating ?? null,
       sentiment: f?.sentiment ?? null,
       hasFeedback: Boolean(f),
+      cost: costOf(d?.llmUsage).cost,
     };
   });
   return { total: all.length, letters };
@@ -198,6 +217,8 @@ export interface AdminLetterDetail {
   revisions: number;
   transcript: string | null; // what the citizen told Madal (null for letters drafted before capture)
   dialogue: Array<{ q: string; a: string }> | null; // full Q&A (null for letters drafted before capture)
+  usage: LlmUsage; // Claude tokens spent on this letter
+  cost: { usd: number; inr: number }; // exact Claude cost at current rates
   draft: LetterDraft | null; // the full letter (for text + document regeneration)
   approvals: Array<{ approvedAt: Date; approvalUtterance: string; revisions: number; draftHash: string }>;
   feedback: Array<{ createdAt: Date; sentiment: string; rating: number | null; text: string }>;
@@ -225,6 +246,8 @@ export async function getAdminLetter(letterId: string): Promise<AdminLetterDetai
     revisions: approvals[0]?.revisions ?? draft.revision,
     transcript: draft.transcript ?? null,
     dialogue: (draft.dialogue ?? null) as Array<{ q: string; a: string }> | null,
+    usage: costOf(draft.llmUsage).usage,
+    cost: costOf(draft.llmUsage).cost,
     draft: (draft.draft ?? null) as LetterDraft | null,
     approvals: approvals.map((a) => ({
       approvedAt: a.approvedAt,

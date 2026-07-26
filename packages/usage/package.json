@@ -1,5 +1,5 @@
 {
-  "name": "@urimai/letters-drafter",
+  "name": "@urimai/usage",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,18 +13,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.106.0",
-    "@urimai/types": "workspace:*",
-    "@urimai/usage": "workspace:*"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.8"
+    "typescript": "^5.6.3"
   }
 }

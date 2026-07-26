@@ -185,6 +185,7 @@ model LetterDraft {
   language      String // "ta" | "en" | "bilingual"
   transcript    String? // the citizen's accumulated narration that produced this draft (PII)
   dialogue      Json? // full turn-by-turn Q&A [{q,a}] between Madal and the citizen (PII)
+  llmUsage      Json? // cumulative Claude tokens for this letter {inputTokens,outputTokens,webSearches,calls}
   draft         Json
   draftHash     String // sha256 of the assembled letter text
   createdAt     DateTime         @default(now())

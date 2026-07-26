@@ -4,6 +4,7 @@
  * (LETTERS_BRIEF Phase 2 acceptance).
  */
 import type { FactKey, LetterFacts } from "@urimai/types";
+import { recordAnthropicUsage } from "@urimai/usage";
 import { firstText, resolveClient, resolveModel, type CallOptions } from "./client.js";
 import { buildExtractUserPrompt, EXTRACT_SYSTEM_PROMPT } from "./prompt.js";
 import { parseLetterFacts } from "./schema.js";
@@ -29,6 +30,7 @@ export async function extractLetterFacts(text: string, opts: ExtractFactsOptions
       system: EXTRACT_SYSTEM_PROMPT,
       messages: [{ role: "user", content: buildExtractUserPrompt(text, opts.pendingFact) }],
     });
+    recordAnthropicUsage((msg as { usage?: Parameters<typeof recordAnthropicUsage>[0] }).usage);
     return parseLetterFacts(firstText(msg));
   } catch (err) {
     console.warn(
