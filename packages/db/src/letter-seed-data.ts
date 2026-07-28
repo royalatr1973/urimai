@@ -84,7 +84,7 @@ export const SEED_LETTER_TYPES: LetterType[] = [
     nameTamil: "நகராட்சி / ஊராட்சி குறை மனு",
     nameEnglish: "Municipal / civic grievance",
     addresseeHint: `நகராட்சி / மாநகராட்சி ஆணையர், அல்லது ஊராட்சி செயல் அலுவலர் / வட்டார வளர்ச்சி அலுவலர் (${VERIFY})`,
-    requiredFacts: ["sender_name", "sender_address", "incident_place", "incident_details", "addressee_office", "copy_to"],
+    requiredFacts: ["sender_name", "sender_address", "incident_details", "addressee_office", "copy_to"],
     optionalFacts: [
       "sender_phone",
       "subject",
@@ -156,7 +156,7 @@ export const SEED_LETTER_TYPES: LetterType[] = [
     nameTamil: "மாறுதல் / விடுப்பு விண்ணப்பம்",
     nameEnglish: "Transfer / leave application",
     addresseeHint: `உங்கள் நிறுவனத் தலைவர் — தலைமை ஆசிரியர், மேலாளர், துறைத் தலைவர் (${VERIFY})`,
-    requiredFacts: ["sender_name", "addressee_office", "subject", "incident_details", "copy_to"],
+    requiredFacts: ["sender_name", "sender_address", "addressee_office", "subject", "incident_details", "copy_to"],
     optionalFacts: ["sender_address", "sender_phone", "incident_date", "reference_ids", "attachments"],
     languageDefault: "ta",
     legalRefs: [],
@@ -171,7 +171,7 @@ export const SEED_LETTER_TYPES: LetterType[] = [
     nameTamil: "பொது மனு",
     nameEnglish: "General petition",
     addresseeHint: `சம்பந்தப்பட்ட அலுவலர் — பொதுவாக வட்டாட்சியர், அல்லது மாவட்ட ஆட்சியர் அலுவலக மனு நாள் பிரிவு (${VERIFY})`,
-    requiredFacts: ["sender_name", "incident_details", "addressee_office", "copy_to"],
+    requiredFacts: ["sender_name", "sender_address", "incident_details", "addressee_office", "copy_to"],
     optionalFacts: [
       "sender_address",
       "sender_phone",
