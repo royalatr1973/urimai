@@ -134,6 +134,8 @@ export interface LettersOrchestratorDeps {
   revisionCap?: number;
   /** Ask the citizen to choose Tamil vs English for the letter (ASK_LETTER_LANGUAGE). */
   askLanguage?: boolean;
+  /** Deliver the PDF directly, skipping the pre-delivery read-back/confirm (READBACK_STYLE=off). */
+  skipReadback?: boolean;
 }
 
 export type LetterTurnResult =
@@ -343,12 +345,15 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
     return { kind: "readback", draft, chunks, revisions: next.revisions, prompt: READBACK_PROMPT, changedOnly: false };
   }
 
-  /** Re-draft a corrected letter and hand it back for delivery + post-delivery review. */
+  /**
+   * Draft and hand the letter straight to delivery + post-delivery review — used both for
+   * the initial direct-deliver path (no correction) and for a post-delivery re-draft.
+   */
   async function produceDelivery(
     sessionId: string,
     state: SessionState,
     type: LetterType,
-    correction: { instruction: string; previousBody: string[] },
+    correction?: { instruction: string; previousBody: string[] },
   ): Promise<LetterTurnResult> {
     const { state: next, draft, hash } = await resolveAndDraft(sessionId, state, type, "delivered", correction);
     return { kind: "deliver", draft, draftHash: hash, revisions: next.revisions, prompt: DELIVERED_REVIEW_PROMPT };
@@ -399,7 +404,10 @@ export function createLettersOrchestrator(deps: LettersOrchestratorDeps) {
       }
     }
 
-    return produceDraft(sessionId, state, type);
+    // Direct-deliver (READBACK_STYLE=off): skip the pre-delivery summary/disclaimer/confirm
+    // and hand over the PDF now — the post-delivery review is the checkpoint (and the AI
+    // disclaimer is on the delivery caption). Otherwise draft → voice read-back.
+    return deps.skipReadback ? produceDelivery(sessionId, state, type) : produceDraft(sessionId, state, type);
   }
 
   /** The Tamil text Madal speaks for a result — the "question" side of a dialogue turn. */

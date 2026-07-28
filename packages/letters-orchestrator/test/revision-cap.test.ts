@@ -9,7 +9,7 @@ describe("revision cap (§7.6 — cap at N, then offer escalation)", () => {
     const sid = "cap";
 
     // Reach the read-back (generic v3 asks addressee + copy too).
-    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    f.queueExtract({ sender_name: "லட்சுமி", sender_address: "கடலூர்", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
     await orch.handleTurn(sid, "வட்டாட்சியருக்கு ஒரு மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
     await orch.handleTurn(sid, "ஆம்"); // → copy_to question
     const rb = await orch.handleTurn(sid, "வேண்டாம்");

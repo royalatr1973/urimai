@@ -160,7 +160,7 @@ describe("full letters conversation", () => {
     const f = makeFakeDeps("generic_petition", null);
     const orch = createLettersOrchestrator(f.deps);
     const sid = "postfix";
-    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    f.queueExtract({ sender_name: "லட்சுமி", sender_address: "கடலூர்", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
     await orch.handleTurn(sid, "வட்டாட்சியருக்கு மனு, என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
     await orch.handleTurn(sid, "ஆம்"); // → copy_to question
     await orch.handleTurn(sid, "வேண்டாம்"); // → readback
@@ -201,7 +201,7 @@ describe("full letters conversation", () => {
     const f = makeFakeDeps("generic_petition", null);
     const orch = createLettersOrchestrator(f.deps);
     const sid = "cc";
-    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்" });
+    f.queueExtract({ sender_name: "லட்சுமி", sender_address: "கடலூர்", incident_details: "வீட்டுல கஷ்டம்" });
     await orch.handleTurn(sid, "மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
     const q1 = await orch.handleTurn(sid, "ஆம்");
     if (q1.kind !== "question") throw new Error(`expected question, got ${q1.kind}`);
@@ -232,7 +232,7 @@ describe("full letters conversation", () => {
       },
     });
     const sid = "ent";
-    f.queueExtract({ sender_name: "முருகன்", incident_details: "பட்டா மாறலை", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    f.queueExtract({ sender_name: "முருகன்", sender_address: "கடலூர்", incident_details: "பட்டா மாறலை", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
     await orch.handleTurn(sid, "பட்டா மாத்தி தரலை, வட்டாட்சியர் அலுவலகத்துக்கு கடிதம் எழுதணும், நான் முருகன்");
     const extractCallsBefore = f.calls.extract.length;
 
@@ -258,7 +258,7 @@ describe("full letters conversation", () => {
     const f = makeFakeDeps("generic_petition", null);
     const orch = createLettersOrchestrator({ ...f.deps, askLanguage: true });
     const sid = "lang";
-    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர்" });
+    f.queueExtract({ sender_name: "லட்சுமி", sender_address: "கடலூர்", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர்" });
     await orch.handleTurn(sid, "மனு எழுதணும், நான் லட்சுமி, வீட்டுல கஷ்டம்");
     // "ஆம்" confirms the type → now the language is asked (not the first gap fact).
     const lang = await orch.handleTurn(sid, "ஆம்");
@@ -270,6 +270,20 @@ describe("full letters conversation", () => {
     const rb = await orch.handleTurn(sid, "வேண்டாம்");
     if (rb.kind !== "readback") throw new Error(`expected readback, got ${rb.kind}`);
     expect(rb.draft.language).toBe("en");
+  });
+
+  it("direct-deliver (skipReadback): once details are in, the PDF is delivered — no read-back", async () => {
+    const f = makeFakeDeps("generic_petition", "drainage_sewage");
+    const orch = createLettersOrchestrator({ ...f.deps, skipReadback: true });
+    const sid = "direct";
+    f.queueExtract({ sender_name: "லட்சுமி", sender_address: "கடலூர்", incident_details: "சாக்கடை" });
+    await orch.handleTurn(sid, "சாக்கடை பிரச்சனை, மனு எழுதணும், நான் லட்சுமி, கடலூர்");
+    const r = await orch.handleTurn(sid, "ஆம்"); // confirm → straight to DELIVER (no readback)
+    expect(r.kind).toBe("deliver");
+    // The post-delivery review is still the checkpoint: "okay" → approval + feedback.
+    const fb = await orch.handleTurn(sid, "சரி");
+    expect(fb.kind).toBe("feedback_request");
+    expect(f.approvals).toHaveLength(1); // delivered-then-approved
   });
 
   it("category found: addressee + copy questions are SKIPPED (To/CC come from its chain)", async () => {
@@ -291,7 +305,7 @@ describe("full letters conversation", () => {
     const f = makeFakeDeps("generic_petition", null);
     const orch = createLettersOrchestrator(f.deps);
     const sid = "nocc";
-    f.queueExtract({ sender_name: "லட்சுமி", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
+    f.queueExtract({ sender_name: "லட்சுமி", sender_address: "கடலூர்", incident_details: "வீட்டுல கஷ்டம்", addressee_office: "வட்டாட்சியர் அலுவலகம்" });
     await orch.handleTurn(sid, "வட்டாட்சியருக்கு மனு எழுதணும், என் பேரு லட்சுமி, வீட்டுல கஷ்டம்");
     const q = await orch.handleTurn(sid, "ஆம்");
     if (q.kind !== "question") throw new Error(`expected question, got ${q.kind}`);

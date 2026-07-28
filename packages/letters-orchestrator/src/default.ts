@@ -114,5 +114,7 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
     revisionCap: opts.revisionCap,
     // Ask Tamil vs English for the letter when ASK_LETTER_LANGUAGE=on.
     askLanguage: process.env.ASK_LETTER_LANGUAGE === "on",
+    // READBACK_STYLE=off → deliver the PDF directly (no pre-delivery summary/confirm).
+    skipReadback: process.env.READBACK_STYLE === "off",
   });
 }
