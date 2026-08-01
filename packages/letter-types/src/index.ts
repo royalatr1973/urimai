@@ -14,6 +14,6 @@ export {
   resolveLanguage,
 } from "./catalogue.js";
 export { hasUsableAddress, officeLocality, pickCcOffices, pickToOffice } from "./offices.js";
-export { districtForPincode, normalizePincode, senderPincode } from "@urimai/types";
+export { districtForPincode, normalizePincode, senderPincode, stateForPincode, talukForPincode } from "@urimai/types";
 export { listLatestLetterTypes, listLatestOffices, toLetterType, toOffice, SEED_LETTER_TYPES } from "@urimai/db";
 export type { FactKey, LetterFacts, LetterType, Office } from "@urimai/types";

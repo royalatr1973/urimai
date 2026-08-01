@@ -1,12 +1,17 @@
 /**
- * Tamil Nadu PIN code → district, by the first three digits (the postal "sorting district").
+ * Tamil Nadu PIN code → place.
  *
- * APPROXIMATE and curator-reviewable: postal prefixes don't line up perfectly with revenue
- * districts (a prefix can span two districts, and some split across prefixes), so this is a
- * district-LEVEL signal, not station/taluk. Its jobs: (1) print a real locality on the
- * letter, (2) route district-level offices. The PIN code itself is always exact; only the
- * district mapping is a best-effort seed — expand/correct it freely.
+ * Two layers, in order:
+ *  1. EXACT — the official directory (2,068 PIN codes; see data/tn_pincodes.csv and the
+ *     generated pincode-data.ts). Gives the district always, and the taluk when the PIN
+ *     code maps to exactly one.
+ *  2. PREFIX fallback — the first three digits (postal "sorting district"), for PIN codes
+ *     missing from the directory. District-level and approximate.
+ *
+ * Deliberate limit: ~40% of TN PIN codes straddle taluk boundaries, so a taluk is returned
+ * only when unambiguous. Naming the wrong Tahsildar would misroute a citizen's letter.
  */
+import { lookupPincode } from "./pincode-data.js";
 import type { LetterFacts } from "./index.js";
 
 const TN_PREFIX_DISTRICT: Record<string, string> = {
@@ -56,11 +61,29 @@ export function normalizePincode(raw: string | null | undefined): string | null 
   return m ? m[1]! : null;
 }
 
-/** The (approximate) district for a PIN code — Tamil name, or null if unknown. */
+/** District for a PIN code — Tamil name. Exact directory first, then the prefix fallback. */
 export function districtForPincode(raw: string | null | undefined): string | null {
   const pin = normalizePincode(raw);
   if (!pin) return null;
-  return TN_PREFIX_DISTRICT[pin.slice(0, 3)] ?? null;
+  return lookupPincode(pin)?.district ?? TN_PREFIX_DISTRICT[pin.slice(0, 3)] ?? null;
+}
+
+/**
+ * Taluk (sub-district) for a PIN code — ONLY when the PIN code maps to exactly one taluk.
+ * null when ambiguous or unknown, so callers fall back to district-level routing rather
+ * than naming a taluk office that may not have jurisdiction.
+ */
+export function talukForPincode(raw: string | null | undefined): string | null {
+  const pin = normalizePincode(raw);
+  if (!pin) return null;
+  return lookupPincode(pin)?.taluk ?? null;
+}
+
+/** "TN" | "PY" for a PIN code — Puducherry sits inside TN but has its own government. */
+export function stateForPincode(raw: string | null | undefined): string | null {
+  const pin = normalizePincode(raw);
+  if (!pin) return null;
+  return lookupPincode(pin)?.state ?? null;
 }
 
 /** The sender's PIN code from facts — the explicit field, else a 6-digit run in the address. */

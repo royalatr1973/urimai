@@ -32,9 +32,16 @@ describe("seed catalogue sanity", () => {
     }
   });
 
-  it("the generic fallback asks name, story, addressee, and copy (v3: always ask To + copy)", () => {
+  it("the generic fallback asks name, address, story, addressee, and copy (v3: always ask To + copy)", () => {
     const generic = SEED_LETTER_TYPES.find((t) => t.id === GENERIC_PETITION_ID)!;
-    expect(generic.requiredFacts).toEqual(["sender_name", "incident_details", "addressee_office", "copy_to"]);
+    // sender_address is required on EVERY type — a formal petition needs a From block.
+    expect(generic.requiredFacts).toEqual([
+      "sender_name",
+      "sender_address",
+      "incident_details",
+      "addressee_office",
+      "copy_to",
+    ]);
   });
 });
 

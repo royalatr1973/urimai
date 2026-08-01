@@ -157,7 +157,7 @@ export const SEED_LETTER_TYPES: LetterType[] = [
     nameEnglish: "Transfer / leave application",
     addresseeHint: `உங்கள் நிறுவனத் தலைவர் — தலைமை ஆசிரியர், மேலாளர், துறைத் தலைவர் (${VERIFY})`,
     requiredFacts: ["sender_name", "sender_address", "addressee_office", "subject", "incident_details", "copy_to"],
-    optionalFacts: ["sender_address", "sender_phone", "incident_date", "reference_ids", "attachments"],
+    optionalFacts: ["sender_pincode", "sender_phone", "incident_date", "reference_ids", "attachments"],
     languageDefault: "ta",
     legalRefs: [],
     bodyGuidance:
@@ -173,7 +173,7 @@ export const SEED_LETTER_TYPES: LetterType[] = [
     addresseeHint: `சம்பந்தப்பட்ட அலுவலர் — பொதுவாக வட்டாட்சியர், அல்லது மாவட்ட ஆட்சியர் அலுவலக மனு நாள் பிரிவு (${VERIFY})`,
     requiredFacts: ["sender_name", "sender_address", "incident_details", "addressee_office", "copy_to"],
     optionalFacts: [
-      "sender_address",
+      "sender_pincode",
       "sender_phone",
       "addressee_name",
       "addressee_address",

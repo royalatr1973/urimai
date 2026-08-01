@@ -299,4 +299,5 @@ export const EMPTY_PROFILE: Profile = {
   is_bpl: null,
 };
 
-export { districtForPincode, normalizePincode, senderPincode } from "./pincode.js";
+export { districtForPincode, normalizePincode, senderPincode, stateForPincode, talukForPincode } from "./pincode.js";
+export { lookupPincode, type PincodePlace } from "./pincode-data.js";
