@@ -39,6 +39,10 @@ export interface ApiDeps {
   renderLetterDocx(draft: unknown): Promise<Buffer>;
   /** Record that an admin opened a specific letter (letter content is PII). */
   logAdminView(sessionId: string): Promise<void>;
+  // --- Per-phone daily-limit allowlist (operator-managed) ---
+  listPhoneLimits(): Promise<Array<{ phone: string; dailyLimit: number; label: string | null; updatedAt: Date }>>;
+  setPhoneLimit(input: { phone: string; dailyLimit: number; label?: string | null }): Promise<{ phone: string; dailyLimit: number; label: string | null }>;
+  deletePhoneLimit(phone: string): Promise<void>;
   /** The static admin page HTML, served at GET /admin. Unset → 404. */
   adminHtml?: string;
   /** Bearer token for /api/operator/* (decrypts PII). Unset → those routes return 503. */
@@ -213,6 +217,30 @@ export async function buildApp(deps: ApiDeps): Promise<FastifyInstance> {
       .send(bytes);
     return reply;
   };
+
+  // Per-phone daily-limit allowlist: list / upsert / remove. All operator-gated.
+  app.get("/api/admin/phone-limits", { preHandler: requireOperator }, async () => {
+    return { limits: await deps.listPhoneLimits() };
+  });
+
+  app.put("/api/admin/phone-limits", { preHandler: requireOperator }, async (req, reply) => {
+    const body = (req.body ?? {}) as { phone?: unknown; dailyLimit?: unknown; label?: unknown };
+    if (typeof body.phone !== "string" || typeof body.dailyLimit !== "number") {
+      reply.code(400).send({ error: "phone (string) and dailyLimit (number) are required" });
+      return reply;
+    }
+    try {
+      return { limit: await deps.setPhoneLimit({ phone: body.phone, dailyLimit: body.dailyLimit, label: typeof body.label === "string" ? body.label : null }) };
+    } catch (e) {
+      reply.code(400).send({ error: e instanceof Error ? e.message : "invalid input" });
+      return reply;
+    }
+  });
+
+  app.delete("/api/admin/phone-limits/:phone", { preHandler: requireOperator }, async (req) => {
+    await deps.deletePhoneLimit((req.params as { phone: string }).phone);
+    return { ok: true };
+  });
 
   app.get("/api/admin/letters/:letterId/pdf", { preHandler: requireOperator }, async (req, reply) =>
     sendDoc(reply, (req.params as { letterId: string }).letterId, "pdf", deps.renderLetterPdf, "application/pdf"),

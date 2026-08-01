@@ -15,6 +15,9 @@ import {
   getAdminSummary,
   listAdminLetters,
   getAdminLetter,
+  listPhoneLimits,
+  setPhoneLimit,
+  deletePhoneLimit,
 } from "@urimai/db";
 import { pingRedis } from "@urimai/cache";
 import { draftToDocx, draftToPdf } from "@urimai/docgen";
@@ -59,6 +62,9 @@ const app = await buildApp({
     // admin-audit table can come later) — the point is the access leaves a trail.
     console.info(JSON.stringify({ evt: "admin_letter_view", sessionId, at: new Date().toISOString() }));
   },
+  listPhoneLimits: () => listPhoneLimits(),
+  setPhoneLimit: (input) => setPhoneLimit(input),
+  deletePhoneLimit: (phone) => deletePhoneLimit(phone),
   adminHtml: loadAdminHtml(),
 });
 

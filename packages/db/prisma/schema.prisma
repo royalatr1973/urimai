@@ -230,6 +230,20 @@ model LetterFeedback {
   @@map("letter_feedback")
 }
 
+/// Per-phone daily letter-limit override (operator-managed allowlist for testing/pilots).
+/// Only numbers the operator deliberately adds in the admin live here — their own device
+/// and invited testers — so plaintext is acceptable and necessary to manage the list.
+/// A phone NOT in this table uses the global DAILY_LETTER_LIMIT.
+model PhoneLimit {
+  phone      String   @id // normalized MSISDN, e.g. "919791234567" (matches WhatsApp `from`)
+  dailyLimit Int // letters/day for this number; 0 = unlimited
+  label      String? // operator's note, e.g. "My phone", "Ravi (tester)"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("phone_limits")
+}
+
 /// Human-safety-net escalation ticket. Contact + message are encrypted (PII).
 model Escalation {
   id         String    @id @default(cuid())

@@ -65,6 +65,48 @@ describe("letter quota — one letter per phone per day", () => {
     expect(store.map.size).toBe(0);
   });
 
+  it("a per-phone override raises the cap above the global default", async () => {
+    const overrides: Record<string, number> = { "919999900000": 5 };
+    const q = createLetterQuota(memoryStore(), {
+      limit: 1,
+      now: noon,
+      limitFor: async (phone) => overrides[phone] ?? null,
+    });
+    // Whitelisted number: still allowed after the default of 1 is exceeded.
+    for (let i = 0; i < 4; i++) await q.record("919999900000", `wa:s${i}`);
+    expect(await q.reached("919999900000")).toBe(false); // 4 of 5
+    await q.record("919999900000", "wa:s5");
+    expect(await q.reached("919999900000")).toBe(true); // 5 of 5
+
+    // A phone with no override still hits the default of 1.
+    await q.record("911", "wa:x");
+    expect(await q.reached("911")).toBe(true);
+  });
+
+  it("an override of 0 means unlimited for that phone", async () => {
+    const q = createLetterQuota(memoryStore(), {
+      limit: 1,
+      now: noon,
+      limitFor: async (phone) => (phone === "912222200000" ? 0 : null),
+    });
+    await q.record("912222200000", "wa:a");
+    await q.record("912222200000", "wa:b");
+    expect(await q.reached("912222200000")).toBe(false); // never capped
+  });
+
+  it("an override-resolver failure falls back to the default (never locks anyone out)", async () => {
+    const q = createLetterQuota(memoryStore(), {
+      limit: 1,
+      now: noon,
+      limitFor: async () => {
+        throw new Error("db down");
+      },
+    });
+    expect(await q.reached("911")).toBe(false);
+    await q.record("911", "wa:s");
+    expect(await q.reached("911")).toBe(true); // default cap still enforced
+  });
+
   it("sets a positive TTL to the next local midnight on the first letter of the day", async () => {
     const store = memoryStore();
     const q = createLetterQuota(store, { limit: 1, now: noon });

@@ -23,6 +23,9 @@ function fakeDeps(over: Partial<ApiDeps> = {}): ApiDeps {
     renderLetterPdf: async () => Buffer.from("%PDF-fake"),
     renderLetterDocx: async () => Buffer.from("PKfake"),
     logAdminView: vi.fn(async () => {}),
+    listPhoneLimits: async () => [{ phone: "919999900000", dailyLimit: 5, label: "Ravi", updatedAt: new Date() }],
+    setPhoneLimit: vi.fn(async (input) => ({ phone: "91" + input.phone.replace(/\D/g, "").slice(-10), dailyLimit: input.dailyLimit, label: input.label ?? null })),
+    deletePhoneLimit: vi.fn(async () => {}),
     adminHtml: "<html>admin</html>",
     operatorToken: "secret-token",
     logger: false,
@@ -123,6 +126,34 @@ describe("admin portal", () => {
 
     const missing = await app.inject({ method: "GET", url: "/api/admin/letters/nope", headers: auth });
     expect(missing.statusCode).toBe(404);
+  });
+
+  it("phone-limit routes are operator-gated (list/upsert/delete)", async () => {
+    const app = await buildApp(fakeDeps());
+    expect((await app.inject({ method: "GET", url: "/api/admin/phone-limits" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "PUT", url: "/api/admin/phone-limits", payload: { phone: "9791234567", dailyLimit: 5 } })).statusCode).toBe(401);
+    expect((await app.inject({ method: "DELETE", url: "/api/admin/phone-limits/919791234567" })).statusCode).toBe(401);
+  });
+
+  it("lists, upserts, and deletes phone limits with the token", async () => {
+    const deps = fakeDeps();
+    const app = await buildApp(deps);
+    const list = await app.inject({ method: "GET", url: "/api/admin/phone-limits", headers: auth });
+    expect(list.json().limits).toHaveLength(1);
+
+    const put = await app.inject({ method: "PUT", url: "/api/admin/phone-limits", headers: auth, payload: { phone: "9791234567", dailyLimit: 5, label: "Me" } });
+    expect(put.statusCode).toBe(200);
+    expect(deps.setPhoneLimit).toHaveBeenCalledWith({ phone: "9791234567", dailyLimit: 5, label: "Me" });
+
+    const del = await app.inject({ method: "DELETE", url: "/api/admin/phone-limits/919791234567", headers: auth });
+    expect(del.statusCode).toBe(200);
+    expect(deps.deletePhoneLimit).toHaveBeenCalledWith("919791234567");
+  });
+
+  it("rejects a malformed phone-limit upsert with 400", async () => {
+    const app = await buildApp(fakeDeps());
+    const r = await app.inject({ method: "PUT", url: "/api/admin/phone-limits", headers: auth, payload: { phone: "9791234567" } });
+    expect(r.statusCode).toBe(400);
   });
 });
 

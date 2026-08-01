@@ -79,4 +79,12 @@ export { encryptString, decryptString, encryptJson, decryptJson, getPiiKey, getK
 export { writeAudit, listAudit, type AuditEntry } from "./audit.js";
 export { createBeneficiaryRecord, type ApplyInput } from "./beneficiary.js";
 export { DbEscalationQueue, listPendingEscalations, resolveEscalation, type EscalationInput } from "./escalation.js";
+export {
+  normalizePhone,
+  listPhoneLimits,
+  getPhoneLimit,
+  setPhoneLimit,
+  deletePhoneLimit,
+  type PhoneLimitRow,
+} from "./phone-limits.js";
 export type { SchemeRow };

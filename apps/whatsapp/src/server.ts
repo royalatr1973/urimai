@@ -6,7 +6,7 @@
  */
 import Fastify from "fastify";
 import { getRedis } from "@urimai/cache";
-import { listLatestSchemes, DbEscalationQueue } from "@urimai/db";
+import { listLatestSchemes, DbEscalationQueue, getPhoneLimit } from "@urimai/db";
 import { draftToDocx, draftToPdf } from "@urimai/docgen";
 import { createDefaultLettersOrchestrator } from "@urimai/letters-orchestrator";
 import { createDefaultOrchestrator } from "@urimai/orchestrator";
@@ -67,8 +67,11 @@ function buildHandler(): { handler: AppRouter | null; reason?: string } {
 
     const redis = getRedis();
     // Per-phone daily letter cap (DAILY_LETTER_LIMIT, default 1; 0 disables). Shared by
-    // the router (checks at letter start) and Madal (records on delivery).
-    const letterQuota = createLetterQuota(redis);
+    // the router (checks at letter start) and Madal (records on delivery). limitFor consults
+    // the operator's per-phone allowlist (admin portal) before the global default.
+    const letterQuota = createLetterQuota(redis, {
+      limitFor: (phone) => getPhoneLimit(phone).then((r) => r?.dailyLimit ?? null),
+    });
 
     // Madal: letters flow behind the SAME number (LETTERS_BRIEF §3). onComplete clears
     // the route so the next contact is greeted fresh (router assigned just below).

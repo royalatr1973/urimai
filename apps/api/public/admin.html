@@ -87,6 +87,16 @@
   .row-actions{display:flex;gap:10px;margin:16px 0}
   .empty{padding:40px;text-align:center;color:var(--soft)}
   .hidden{display:none}
+  /* phone-limit form */
+  .pl-form{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .pl-form input{font:inherit;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .pl-form input#plPhone{flex:1;min-width:180px}
+  .pl-form input#plLimit{width:90px}
+  .pl-form input#plLabel{flex:1;min-width:150px}
+  .pl-table tbody tr{cursor:default}
+  .pl-table tbody tr:hover{background:transparent}
+  .btn-danger{border-color:var(--danger);color:var(--danger)}
+  .btn-danger:hover{background:var(--danger-bg);border-color:var(--danger);color:var(--danger)}
 </style>
 </head>
 <body>
@@ -112,6 +122,20 @@
     <div id="tiles" class="tiles"></div>
     <div class="section-h">Letters — newest first</div>
     <div id="listWrap"></div>
+
+    <div class="section-h">Daily-limit allowlist — testers &amp; your own number</div>
+    <p class="muted" style="margin:-4px 0 12px;font-size:13px">
+      Numbers here get their own letters/day cap, overriding the default
+      (<span id="defaultLimitNote">1</span>/day). Everyone else stays on the default. Use 0 for unlimited.
+    </p>
+    <div class="pl-form">
+      <input id="plPhone" placeholder="Phone (e.g. 9791234567)" autocomplete="off" inputmode="tel" />
+      <input id="plLimit" type="number" min="0" max="1000" placeholder="Limit" value="5" />
+      <input id="plLabel" placeholder="Label (optional, e.g. Ravi)" autocomplete="off" />
+      <button class="btn btn-primary" onclick="savePhoneLimit()">Add / update</button>
+    </div>
+    <div id="plErr" class="err" style="margin:6px 0 0"></div>
+    <div id="plWrap" style="margin-top:12px"></div>
   </div>
 </div>
 
@@ -140,6 +164,17 @@ async function api(path){
   if(res.status === 401 || res.status === 503){ logout("Session expired or token rejected — sign in again."); throw new Error("auth"); }
   if(!res.ok) throw new Error("HTTP " + res.status);
   return res.json();
+}
+async function apiSend(path, method, body){
+  const res = await fetch(path, {
+    method,
+    headers: { ...authHeaders(), ...(body ? {"Content-Type":"application/json"} : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if(res.status === 401 || res.status === 503){ logout("Session expired or token rejected — sign in again."); throw new Error("auth"); }
+  const data = await res.json().catch(() => ({}));
+  if(!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+  return data;
 }
 
 async function login(){
@@ -170,7 +205,48 @@ async function refresh(){
   try{
     const [summary, list] = await Promise.all([ api("/api/admin/summary"), api("/api/admin/letters?limit=100") ]);
     renderTiles(summary); renderList(list.letters, list.total);
+    loadPhoneLimits();
   }catch(e){ if(e.message !== "auth") alert("Load failed: " + e.message); }
+}
+
+async function loadPhoneLimits(){
+  try{
+    const { limits } = await api("/api/admin/phone-limits");
+    renderPhoneLimits(limits);
+  }catch(e){ if(e.message !== "auth") $("plWrap").innerHTML = `<p class="err">Could not load limits: ${esc(e.message)}</p>`; }
+}
+function renderPhoneLimits(rows){
+  if(!rows || !rows.length){ $("plWrap").innerHTML = `<p class="muted" style="font-size:13px">No overrides yet — every number uses the default cap.</p>`; return; }
+  const body = rows.map(r => `
+    <tr>
+      <td class="mono">${esc(r.phone)}</td>
+      <td>${esc(r.label || "—")}</td>
+      <td style="text-align:center">${r.dailyLimit === 0 ? "unlimited" : esc(r.dailyLimit) + "/day"}</td>
+      <td style="text-align:right"><button class="btn btn-danger" onclick='removePhoneLimit(${JSON.stringify(r.phone)})'>Remove</button></td>
+    </tr>`).join("");
+  $("plWrap").innerHTML = `<table class="pl-table">
+    <thead><tr><th>Phone</th><th>Label</th><th style="text-align:center">Cap</th><th></th></tr></thead>
+    <tbody>${body}</tbody></table>`;
+}
+async function savePhoneLimit(){
+  const phone = $("plPhone").value.trim();
+  const dailyLimit = Number($("plLimit").value);
+  const label = $("plLabel").value.trim();
+  $("plErr").textContent = "";
+  if(!phone){ $("plErr").textContent = "Enter a phone number."; return; }
+  if(!Number.isFinite(dailyLimit) || dailyLimit < 0){ $("plErr").textContent = "Limit must be 0 or more."; return; }
+  try{
+    await apiSend("/api/admin/phone-limits", "PUT", { phone, dailyLimit, label: label || null });
+    $("plPhone").value = ""; $("plLabel").value = "";
+    loadPhoneLimits();
+  }catch(e){ if(e.message !== "auth") $("plErr").textContent = e.message; }
+}
+async function removePhoneLimit(phone){
+  if(!confirm("Remove the override for " + phone + "? It will go back to the default cap.")) return;
+  try{
+    await apiSend("/api/admin/phone-limits/" + encodeURIComponent(phone), "DELETE");
+    loadPhoneLimits();
+  }catch(e){ if(e.message !== "auth") alert("Remove failed: " + e.message); }
 }
 
 function tile(k, v, sub, cls){

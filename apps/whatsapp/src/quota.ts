@@ -24,10 +24,32 @@ export interface LetterQuota {
   record(phone: string, sessionId: string): Promise<void>;
 }
 
-export function createLetterQuota(store: QuotaStore, opts: { limit?: number; now?: () => Date } = {}): LetterQuota {
-  const limit = opts.limit ?? Number(process.env.DAILY_LETTER_LIMIT ?? "1");
+/**
+ * @param opts.limit    Global default cap (DAILY_LETTER_LIMIT). 0/blank = disabled.
+ * @param opts.limitFor Optional per-phone override resolver (the admin allowlist). Returns a
+ *                      number to override the default for that phone, or null to fall back.
+ *                      Failures here must never block a citizen — treat them as "no override".
+ */
+export function createLetterQuota(
+  store: QuotaStore,
+  opts: { limit?: number; now?: () => Date; limitFor?: (phone: string) => Promise<number | null> } = {},
+): LetterQuota {
+  const defaultLimit = opts.limit ?? Number(process.env.DAILY_LETTER_LIMIT ?? "1");
   const now = opts.now ?? (() => new Date());
   const key = (phone: string) => `madal:daily:${phone}`;
+
+  /** This phone's effective cap: its allowlist override if any, else the global default. */
+  async function limitFor(phone: string): Promise<number> {
+    if (opts.limitFor) {
+      try {
+        const o = await opts.limitFor(phone);
+        if (o !== null && o !== undefined && Number.isFinite(o)) return o;
+      } catch {
+        /* override lookup failed — fall back to the default rather than lock anyone out */
+      }
+    }
+    return defaultLimit;
+  }
 
   function secondsToMidnight(): number {
     const d = now();
@@ -37,13 +59,15 @@ export function createLetterQuota(store: QuotaStore, opts: { limit?: number; now
   }
 
   return {
-    limit,
+    limit: defaultLimit,
     async reached(phone: string): Promise<boolean> {
-      if (!Number.isFinite(limit) || limit <= 0) return false; // disabled
+      const limit = await limitFor(phone);
+      if (!Number.isFinite(limit) || limit <= 0) return false; // disabled / unlimited
       const v = await store.get(key(phone));
       return (v ? Number(v) : 0) >= limit;
     },
     async record(phone: string, sessionId: string): Promise<void> {
+      const limit = await limitFor(phone);
       if (!Number.isFinite(limit) || limit <= 0) return;
       // Count each letter once, even if it re-delivers after a correction (same session).
       const first = await store.set(`madal:counted:${sessionId}`, "1", "EX", 40 * 60, "NX");
