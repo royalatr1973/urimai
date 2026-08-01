@@ -175,7 +175,14 @@ function main() {
 
   const esc = (v) => (/[",]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v);
   const header = "pincode,state,district,district_tamil,taluk,taluk_count,district_ambiguous,post_office,lat,lon";
-  writeFileSync(OUT, [header, ...rows.map((r) => r.map(esc).join(","))].join("\n") + "\n", "utf8");
+  // UTF-8 BOM: without it Excel opens the file as ANSI and silently destroys every Tamil
+  // character (turning them into "?") the moment it is re-saved.
+  try {
+    writeFileSync(OUT, "﻿" + [header, ...rows.map((r) => r.map(esc).join(","))].join("\r\n") + "\r\n", "utf8");
+  } catch (e) {
+    if (e.code === "EBUSY") console.log(`  ⚠ ${OUT} is open in another program — CSV not rewritten (continuing)`);
+    else throw e;
+  }
 
   console.log(`wrote ${OUT}`);
   console.log(`  ${rows.length} PIN codes  (TN ${rows.filter((r) => r[1] === "TN").length}, Puducherry ${rows.filter((r) => r[1] === "PY").length})`);
@@ -189,14 +196,31 @@ function main() {
   // --- generated lookup module (the app reads this, not the CSV) --------------
   // Encoded compactly: shared district/taluk tables + one "pin,dIdx,tIdx" row each, so the
   // 2k-entry table costs ~40KB instead of ~400KB of object literals.
+  // Curator-supplied Tamil taluk names (data/tn_taluk_tamil.csv) — so the address line is
+  // fully Tamil instead of mixed script. Falls back to the English name when absent.
+  const talukTamil = new Map();
+  try {
+    const t = readFileSync(fileURLToPath(new URL("../data/tn_taluk_tamil.csv", import.meta.url)), "utf8")
+      .replace(/^﻿/, "");
+    for (const line of t.split(/\r?\n/).slice(1)) {
+      if (!line.trim()) continue;
+      const f = parseCsvLine(line);
+      if (f[0] && f[1]) talukTamil.set(f[0].trim(), f[1].trim());
+    }
+    console.log(`  taluk Tamil names loaded          : ${talukTamil.size}`);
+  } catch {
+    console.log("  (no data/tn_taluk_tamil.csv — taluks will stay English)");
+  }
+
   const districts = [...new Set(rows.map((r) => `${r[3] || r[2]}|${r[1]}`))].sort();
-  const taluks = [...new Set(rows.map((r) => r[4]).filter(Boolean))].sort();
+  const talukName = (en) => talukTamil.get(en) ?? en;
+  const taluks = [...new Set(rows.map((r) => talukName(r[4])).filter(Boolean))].sort();
   const dIdx = new Map(districts.map((d, i) => [d, i]));
   const tIdx = new Map(taluks.map((t, i) => [t, i]));
   // A taluk is only emitted when the PIN maps to exactly ONE — an ambiguous PIN must never
   // claim a taluk, because naming the wrong Tahsildar misroutes the letter.
   const packed = rows
-    .map((r) => `${r[0]},${dIdx.get(`${r[3] || r[2]}|${r[1]}`)},${r[5] === "1" ? tIdx.get(r[4]) : ""}`)
+    .map((r) => `${r[0]},${dIdx.get(`${r[3] || r[2]}|${r[1]}`)},${r[5] === "1" ? tIdx.get(talukName(r[4])) : ""}`)
     .join(";");
 
   const ts = `/**

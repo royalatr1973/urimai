@@ -1,4 +1,4 @@
-pincode,state,district,district_tamil,taluk,taluk_count,district_ambiguous,post_office,lat,lon
+﻿pincode,state,district,district_tamil,taluk,taluk_count,district_ambiguous,post_office,lat,lon
 600001,TN,Chennai,சென்னை,Maduravoyal,1,no,Chennai G.P.O.,13.1051,80.2844
 600002,TN,Chennai,சென்னை,,0,yes,Anna Road H.O,13.0745,80.2698
 600003,TN,Chennai,சென்னை,Aminjikarai,1,no,Park Town H.O,13.0830,80.2788
