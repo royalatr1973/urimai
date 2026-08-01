@@ -12,6 +12,7 @@ import { createDefaultLettersOrchestrator } from "@urimai/letters-orchestrator";
 import { createDefaultOrchestrator } from "@urimai/orchestrator";
 import { createMessageHandler } from "./handler.js";
 import { createMadalHandler } from "./madal.js";
+import { createLetterQuota } from "./quota.js";
 import { createAppRouter, type AppRouter } from "./router.js";
 import { createSpeaker, createTranscriber } from "./voice.js";
 import { createSpeechProvider, transcodeOggToWav, transcodeWavToOggOpus, type SpeechConfig } from "@urimai/speech";
@@ -64,6 +65,11 @@ function buildHandler(): { handler: AppRouter | null; reason?: string } {
       helplineText: env.HELPLINE_TEXT,
     });
 
+    const redis = getRedis();
+    // Per-phone daily letter cap (DAILY_LETTER_LIMIT, default 1; 0 disables). Shared by
+    // the router (checks at letter start) and Madal (records on delivery).
+    const letterQuota = createLetterQuota(redis);
+
     // Madal: letters flow behind the SAME number (LETTERS_BRIEF §3). onComplete clears
     // the route so the next contact is greeted fresh (router assigned just below).
     let router: AppRouter;
@@ -78,9 +84,9 @@ function buildHandler(): { handler: AppRouter | null; reason?: string } {
       helplineText: env.HELPLINE_TEXT,
       // READBACK_STYLE=brief speaks a one-line summary instead of the whole letter (saves TTS).
       readbackBrief: env.READBACK_STYLE === "brief",
+      recordDelivered: (from, sessionId) => letterQuota.record(from, sessionId),
     });
 
-    const redis = getRedis();
     router = createAppRouter({
       routeStore: {
         get: (key) => redis.get(key),
@@ -97,6 +103,7 @@ function buildHandler(): { handler: AppRouter | null; reason?: string } {
       ttlSeconds: 30 * 60,
       // Testing toggle: LETTERS_ONLY=true disables the schemes flow entirely.
       lettersOnly: env.LETTERS_ONLY === "true" || env.LETTERS_ONLY === "1",
+      letterQuotaReached: (from) => letterQuota.reached(from),
     });
     if (env.LETTERS_ONLY === "true" || env.LETTERS_ONLY === "1") {
       app.log.warn("LETTERS_ONLY mode: schemes (Urimai) flow is DISABLED — every message drives the letters app.");

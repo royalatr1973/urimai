@@ -184,6 +184,69 @@ describe("app router (§3 — one webhook, two apps)", () => {
     expect(escalation.enqueue).toHaveBeenCalledOnce();
   });
 
+  it("daily cap: blocks a NEW letter when the phone is at its limit, but never mid-letter", async () => {
+    const routeStore = memoryRouteStore();
+    const spoken: string[] = [];
+    const madal = { handleText: vi.fn(async () => {}), start: vi.fn(async () => {}), reset: vi.fn(async () => {}) };
+    const atLimit = new Set<string>();
+    const router = createAppRouter({
+      routeStore,
+      toText: async (m) => (m.kind === "text" ? (m.text ?? "") : null),
+      speak: async (_to, t) => void spoken.push(t),
+      urimai: { handleInbound: vi.fn(async () => {}) },
+      madal,
+      escalation: { enqueue: vi.fn(async () => {}) },
+      whatsapp: { sendText: vi.fn(async () => {}) } as never,
+      now: () => "2026-08-01T00:00:00Z",
+      lettersOnly: true,
+      letterQuotaReached: async (from) => atLimit.has(from),
+    });
+
+    // Phone 911 already made today's letter → a fresh opener is blocked, never reaches Madal.
+    atLimit.add("911");
+    await router.handleInbound(text("911", "வணக்கம்"));
+    expect(madal.start).not.toHaveBeenCalled();
+    expect(madal.handleText).not.toHaveBeenCalled();
+    expect(spoken.at(-1)).toContain("ஒரு நாளைக்கு ஒரு கடிதம்");
+
+    // Even a reset word can't start a second letter the same day.
+    await router.handleInbound(text("911", "புதிது"));
+    expect(madal.reset).not.toHaveBeenCalled();
+
+    // A DIFFERENT phone under the cap starts normally.
+    await router.handleInbound(text("922", "வணக்கம்"));
+    expect(madal.start).toHaveBeenCalledWith("922");
+  });
+
+  it("daily cap: an in-progress letter is never blocked, even after the sender hits the cap", async () => {
+    const routeStore = memoryRouteStore();
+    const spoken: string[] = [];
+    const madal = { handleText: vi.fn(async () => {}), start: vi.fn(async () => {}), reset: vi.fn(async () => {}) };
+    const atLimit = new Set<string>();
+    const router = createAppRouter({
+      routeStore,
+      toText: async (m) => (m.kind === "text" ? (m.text ?? "") : null),
+      speak: async (_to, t) => void spoken.push(t),
+      urimai: { handleInbound: vi.fn(async () => {}) },
+      madal,
+      escalation: { enqueue: vi.fn(async () => {}) },
+      whatsapp: { sendText: vi.fn(async () => {}) } as never,
+      now: () => "2026-08-01T00:00:00Z",
+      lettersOnly: true,
+      letterQuotaReached: async (from) => atLimit.has(from),
+    });
+
+    // Start a letter (under the cap), then the cap flips true mid-flow (delivery recorded).
+    await router.handleInbound(text("911", "வணக்கம்"));
+    expect(madal.start).toHaveBeenCalledWith("911");
+    atLimit.add("911");
+
+    // Their next turn continues the SAME letter — review/correction must still go through.
+    await router.handleInbound(text("911", "இந்த இடத்தை மாத்துங்க"));
+    expect(madal.handleText).toHaveBeenCalledWith("911", "இந்த இடத்தை மாத்துங்க");
+    expect(spoken.join()).not.toContain("ஒரு நாளைக்கு ஒரு கடிதம்");
+  });
+
   it("clearRoute (letter completed) makes the next contact a fresh greeting", async () => {
     const { router, spoken, madal } = makeRouter();
     await router.handleInbound(text("911", "கடிதம்"));

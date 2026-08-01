@@ -33,6 +33,12 @@ export interface MadalHandlerDeps {
   helplineText?: string;
   /** READBACK_STYLE=brief: speak a one-line summary instead of the full letter (saves Sarvam TTS). */
   readbackBrief?: boolean;
+  /**
+   * Count a successfully delivered letter against the sender's daily quota. Deduped per
+   * session inside the quota, so a correction (which re-delivers) still counts as one.
+   * Undefined = no quota wired (tests / cap disabled).
+   */
+  recordDelivered?: (from: string, sessionId: string) => Promise<void>;
 }
 
 /** A short spoken summary of the letter for brief read-back mode (what it's about, to whom). */
@@ -139,6 +145,14 @@ export function createMadalHandler(deps: MadalHandlerDeps) {
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           );
           await deps.speak(from, r.prompt.ta); // "check the PDF — okay, or any change?"
+          // A letter actually reached the citizen — spend one of today's quota (deduped
+          // per session, so later corrections don't double-count). Never let a quota
+          // hiccup undo a delivered letter.
+          try {
+            await deps.recordDelivered?.(from, sessionId(from));
+          } catch (err) {
+            console.error("[madal] quota record failed:", err instanceof Error ? err.message : err);
+          }
         } catch (err) {
           console.error("[madal] document delivery failed:", err instanceof Error ? err.message : err);
           await deps.whatsapp.sendText(from, MSG.deliveryFailed);

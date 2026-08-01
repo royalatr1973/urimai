@@ -84,7 +84,8 @@ describe("Madal WhatsApp renderer", () => {
   });
 
   it("deliver sends .pdf AND .docx, asks the user to review them, and does NOT close yet", async () => {
-    const { handler, orchestrator, whatsapp, spoken, onComplete } = makeHandler();
+    const recordDelivered = vi.fn(async (_from: string, _sid: string) => {});
+    const { handler, orchestrator, whatsapp, spoken, onComplete } = makeHandler({ recordDelivered });
     orchestrator.handleTurn.mockResolvedValue({
       kind: "deliver",
       draft,
@@ -103,6 +104,23 @@ describe("Madal WhatsApp renderer", () => {
     expect(docCalls[1]![2]).toBe("madal-letter.docx");
     expect(spoken.join()).toContain("PDF-ஐ சரிபார்க்கவும்"); // review prompt spoken after the docs
     expect(onComplete).not.toHaveBeenCalled(); // session stays open for the review
+    // A delivered letter spends one of the sender's daily quota, keyed by the session.
+    expect(recordDelivered).toHaveBeenCalledWith("911", "wa:911");
+  });
+
+  it("deliver does NOT spend quota when document sending fails (no letter actually reached them)", async () => {
+    const recordDelivered = vi.fn(async () => {});
+    const { handler, orchestrator, whatsapp } = makeHandler({ recordDelivered });
+    whatsapp.sendDocument.mockRejectedValueOnce(new Error("graph 500"));
+    orchestrator.handleTurn.mockResolvedValue({
+      kind: "deliver",
+      draft,
+      draftHash: "cd".repeat(32),
+      revisions: 0,
+      prompt: { ta: "சரிபார்க்கவும்", en: "Check" },
+    });
+    await handler.handleText("911", "சரி");
+    expect(recordDelivered).not.toHaveBeenCalled();
   });
 
   it("feedback_request sends a 5-star tappable list (best→worst) and keeps the session open", async () => {

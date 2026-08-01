@@ -47,6 +47,10 @@ const MSG = {
   unsupported: "தயவுசெய்து உங்கள் நிலையை குரல் செய்தியாக அல்லது எழுத்தாக அனுப்புங்கள்.",
   voiceNotReady: "தற்போது குரல் செய்திகளை கேட்க முடியவில்லை — தயவுசெய்து எழுத்தாக அனுப்புங்கள்.",
   handoff: "நேரடி உதவிக்கு, உங்கள் அருகிலுள்ள இ-சேவை மையம் அல்லது வட்டாட்சியர் அலுவலகத்தை அணுகவும்.",
+  // Daily cap reached: a warm block, not a scolding — say why and when to come back.
+  dailyLimit:
+    "இன்றைக்கு ஒரு கடிதம் தயாராகிவிட்டது. ஒரு நாளைக்கு ஒரு கடிதம் மட்டுமே எழுத முடியும். " +
+    "நாளை மீண்டும் முயற்சி செய்யுங்கள். அவசர உதவிக்கு 'help' என்று அனுப்புங்கள்.",
 };
 
 /** "greeted" = we asked the mode question and are awaiting a (possibly unclear) reply. */
@@ -72,6 +76,12 @@ export interface RouterDeps {
    * no scheme keywords. "help" and reset still work. Flip off to restore both apps.
    */
   lettersOnly?: boolean;
+  /**
+   * Per-phone daily letter cap (LetterQuota.reached). Checked ONLY when a message would
+   * START a new letter — an in-progress letter, its review, and corrections are never
+   * blocked. Undefined = no cap (e.g. tests that don't exercise the quota).
+   */
+  letterQuotaReached?: (from: string) => Promise<boolean>;
 }
 
 const routeKey = (from: string) => `madal:route:${from}`;
@@ -106,19 +116,31 @@ export function createAppRouter(deps: RouterDeps) {
 
     // --- letters-only mode: schemes flow disabled (testing) ------------------
     if (deps.lettersOnly) {
-      if (isResetRequest(text)) {
-        await deps.madal.reset(msg.from);
-        await setRoute(msg.from, "madal");
-        await deps.madal.start(msg.from); // fresh letters session + listen prompt
-        return;
-      }
+      // "help" always reaches a human — never gated by the letter cap.
       if (isHelpRequest(text)) {
         await deps.escalation.enqueue({ from: msg.from, text, reason: "help_requested", at: now() });
         if (deps.helplineText) await deps.whatsapp.sendText(msg.from, deps.helplineText);
         await deps.speak(msg.from, MSG.handoff);
         return;
       }
-      if ((await getRoute(msg.from)) === "madal") {
+
+      const routed = (await getRoute(msg.from)) === "madal";
+      // A reset word, or a fresh contact, both START a new letter → this is the one point
+      // where the daily cap applies. An active letter (routed, non-reset) — including its
+      // post-delivery review and corrections — is never blocked halfway.
+      const startsNewLetter = isResetRequest(text) || !routed;
+      if (startsNewLetter && deps.letterQuotaReached && (await deps.letterQuotaReached(msg.from))) {
+        await deps.speak(msg.from, MSG.dailyLimit);
+        return;
+      }
+
+      if (isResetRequest(text)) {
+        await deps.madal.reset(msg.from);
+        await setRoute(msg.from, "madal");
+        await deps.madal.start(msg.from); // fresh letters session + listen prompt
+        return;
+      }
+      if (routed) {
         await deps.madal.handleText(msg.from, text);
         return;
       }
