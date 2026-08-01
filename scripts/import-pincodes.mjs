@@ -1,8 +1,12 @@
 /**
  * Convert the official India Post "All India Pincode Directory" into the Madal seed file.
  *
- *   node scripts/import-pincodes.mjs <official.csv> [--state "TAMIL NADU"]
+ *   node scripts/import-pincodes.mjs <official.json|official.csv> [--state "TAMIL NADU"]
  *     → writes data/tn_pincodes.csv
+ *
+ * Accepts the data.gov.in JSON export (either a bare array, or the API envelope with a
+ * `records`/`data` array) as well as CSV. JSON is the safer download: no delimiter or
+ * encoding ambiguity, and Tamil text survives intact.
  *
  * WHY an importer rather than a hand-written dataset: there are ~19,000 PIN codes in Tamil
  * Nadu, each with an office name and taluk. That data must come from the authoritative
@@ -41,11 +45,45 @@ function parseCsvLine(line) {
 
 const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z]/g, "");
 
-/** Find a column index by any of its known aliases. */
-function col(header, ...aliases) {
+/** Pick a value from a record by any of its known field aliases (case/space-insensitive). */
+function pick(rec, ...aliases) {
   const want = aliases.map(norm);
-  for (let i = 0; i < header.length; i++) if (want.includes(norm(header[i]))) return i;
-  return -1;
+  for (const [k, v] of Object.entries(rec)) if (want.includes(norm(k))) return v;
+  return undefined;
+}
+
+/**
+ * Load the official file as an array of plain records, from JSON or CSV.
+ * JSON may be a bare array, or the data.gov.in envelope: {records:[…]} / {data:[…]}.
+ */
+function loadRecords(src) {
+  const raw = readFileSync(src, "utf8");
+  const looksJson = /\.json$/i.test(src) || /^\s*[[{]/.test(raw);
+  if (looksJson) {
+    const parsed = JSON.parse(raw);
+    const arr = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.records)
+        ? parsed.records
+        : Array.isArray(parsed.data)
+          ? parsed.data
+          : Array.isArray(parsed.rows)
+            ? parsed.rows
+            : null;
+    if (!arr) throw new Error("JSON has no array of records (expected [] or {records|data|rows: []})");
+    // data.gov.in sometimes ships `data` as arrays-of-values plus a `field` list — zip them.
+    if (arr.length > 0 && Array.isArray(arr[0]) && Array.isArray(parsed.field)) {
+      const names = parsed.field.map((f) => f.id ?? f.name ?? f);
+      return arr.map((row) => Object.fromEntries(names.map((n, i) => [n, row[i]])));
+    }
+    return arr;
+  }
+  const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  const header = parseCsvLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const f = parseCsvLine(line);
+    return Object.fromEntries(header.map((h, i) => [h, f[i]]));
+  });
 }
 
 /** Title-case a SHOUTED official name ("KOVILPATTI S.O" → "Kovilpatti S.O"). */
@@ -76,41 +114,37 @@ const DISTRICT_TAMIL = {
 function main() {
   const [src, ...rest] = process.argv.slice(2);
   if (!src) {
-    console.error("usage: node scripts/import-pincodes.mjs <official-pincode.csv> [--state \"TAMIL NADU\"]");
+    console.error('usage: node scripts/import-pincodes.mjs <official.json|official.csv> [--state "TAMIL NADU"]');
     process.exit(1);
   }
   const stateIdx = rest.indexOf("--state");
   const wantState = norm(stateIdx >= 0 ? rest[stateIdx + 1] : "TAMIL NADU");
 
-  const lines = readFileSync(src, "utf8").split(/\r?\n/).filter((l) => l.trim().length > 0);
-  const header = parseCsvLine(lines[0]);
-
-  const iPin = col(header, "pincode", "pin code", "pin");
-  const iOffice = col(header, "officename", "office name", "post office name");
-  const iType = col(header, "officetype", "office type");
-  const iTaluk = col(header, "taluk", "taluka", "sub district", "subdistrict");
-  const iDist = col(header, "districtname", "district", "district name");
-  const iState = col(header, "statename", "state", "state name");
-  if (iPin < 0 || iDist < 0) {
-    console.error(`could not find pincode/district columns in: ${header.join(", ")}`);
+  const records = loadRecords(src);
+  if (records.length === 0) {
+    console.error("no records found in the file");
+    process.exit(1);
+  }
+  if (pick(records[0], "pincode", "pin code", "pin") === undefined) {
+    console.error(`could not find a pincode field. Fields seen: ${Object.keys(records[0]).join(", ")}`);
     process.exit(1);
   }
 
   const rows = [];
   const unknownDistricts = new Set();
-  for (const line of lines.slice(1)) {
-    const f = parseCsvLine(line);
-    if (iState >= 0 && norm(f[iState]) !== wantState) continue;
-    const pin = String(f[iPin] ?? "").trim().match(/\d{6}/)?.[0];
+  for (const rec of records) {
+    const state = pick(rec, "statename", "state", "state name");
+    if (state !== undefined && norm(state) !== wantState) continue;
+    const pin = String(pick(rec, "pincode", "pin code", "pin") ?? "").trim().match(/\d{6}/)?.[0];
     if (!pin) continue;
-    const district = tidy(f[iDist]);
+    const district = tidy(pick(rec, "districtname", "district", "district name"));
     const ta = DISTRICT_TAMIL[norm(district)] ?? "";
     if (!ta) unknownDistricts.add(district);
     rows.push([
       pin,
-      tidy(iOffice >= 0 ? f[iOffice] : ""),
-      String(iType >= 0 ? f[iType] : "").trim().toUpperCase(),
-      tidy(iTaluk >= 0 ? f[iTaluk] : ""),
+      tidy(pick(rec, "officename", "office name", "post office name")),
+      String(pick(rec, "officetype", "office type") ?? "").trim().toUpperCase(),
+      tidy(pick(rec, "taluk", "taluka", "sub district", "subdistrict")),
       district,
       ta,
     ]);
