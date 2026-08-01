@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { draftLetter } from "../src/draft.js";
 import type { DrafterClient } from "../src/draft.js";
-import { BLANK, buildAddresseeBlock, buildSubject, stripCuratorMarkers } from "../src/skeleton.js";
+import { BLANK, buildAddresseeBlock, buildSenderBlock, buildSubject, stripCuratorMarkers } from "../src/skeleton.js";
 import { FACTS, POLICE_TYPE, RTI_TYPE } from "./fixtures.js";
 
 const reply = (text: string): DrafterClient => ({
@@ -121,5 +121,14 @@ describe("deterministic skeleton", () => {
   it("stripCuratorMarkers removes only the marker", () => {
     expect(stripCuratorMarkers("Labour Officer. (UNVERIFIED — confirm)")).toBe("Labour Officer.");
     expect(stripCuratorMarkers("Labour Officer (Salem district)")).toBe("Labour Officer (Salem district)");
+  });
+
+  it("sender block prints the district + PIN code, de-duping a PIN left in the address", () => {
+    const withField = buildSenderBlock({ sender_name: "லட்சுமி", sender_address: "12, காந்தி ரோடு", sender_pincode: "641001" });
+    expect(withField).toContain("கோயம்புத்தூர் - 641001"); // district resolved from the PIN
+
+    const pinInAddress = buildSenderBlock({ sender_name: "முருகன்", sender_address: "5, மெயின் ரோடு, மதுரை 625001" });
+    expect(pinInAddress).toContain("மதுரை - 625001");
+    expect(pinInAddress).not.toContain("மதுரை 625001"); // the stray PIN was stripped, not duplicated
   });
 });

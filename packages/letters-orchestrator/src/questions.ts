@@ -16,8 +16,12 @@ export const QUESTIONS: Record<FactKey, LetterQuestion> = {
     en: "What is your full name, for the letter?",
   },
   sender_address: {
-    ta: "உங்கள் முகவரியை சொல்லுங்கள் — ஊர், தெரு.",
-    en: "What is your address — town and street?",
+    ta: "உங்கள் முகவரியை சொல்லுங்கள் — ஊர், தெரு, பின்கோடு (PIN code).",
+    en: "What is your address — town, street, and PIN code?",
+  },
+  sender_pincode: {
+    ta: "உங்கள் பகுதியின் 6-இலக்க பின்கோடு (PIN code) என்ன?",
+    en: "What is your area's 6-digit PIN code?",
   },
   sender_phone: {
     ta: "தொடர்பு கொள்ள உங்கள் போன் எண் என்ன?",

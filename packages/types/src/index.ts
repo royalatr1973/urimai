@@ -137,6 +137,7 @@ export type Verdict = {
 export type FactKey =
   | "sender_name"
   | "sender_address"
+  | "sender_pincode"
   | "sender_phone"
   | "addressee_name"
   | "addressee_office"
@@ -156,6 +157,7 @@ export type FactKey =
 export const FACT_KEYS: FactKey[] = [
   "sender_name",
   "sender_address",
+  "sender_pincode",
   "sender_phone",
   "addressee_name",
   "addressee_office",
@@ -296,3 +298,5 @@ export const EMPTY_PROFILE: Profile = {
   elected_representative: null,
   is_bpl: null,
 };
+
+export { districtForPincode, normalizePincode, senderPincode } from "./pincode.js";

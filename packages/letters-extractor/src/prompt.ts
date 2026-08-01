@@ -74,7 +74,8 @@ Include a key ONLY when the person clearly stated that fact. If something is uns
 Return ONLY a single JSON object — no prose, no markdown, no code fences. Include ONLY the keys you have evidence for, from exactly this set (all values are strings):
 
 sender_name         the writer's own name
-sender_address      the writer's address (as much as they gave)
+sender_address      the writer's address (as much as they gave), WITHOUT the PIN code
+sender_pincode      the writer's 6-digit postal PIN code, if they gave one (e.g. 641001)
 sender_phone        the writer's phone number
 addressee_name      the named person the letter goes TO
 addressee_office    the office/authority it goes to (police station, municipality, PIO, employer...)
@@ -105,6 +106,7 @@ copy_to             who else should receive a copy (நகல்), ONLY if they 
 const FACT_CONTEXT: Record<FactKey, string> = {
   sender_name: "the writer's own name — a bare name is the answer",
   sender_address: "the writer's address — a bare address/village/street answer belongs here",
+  sender_pincode: "the writer's 6-digit PIN code — a bare 6-digit number (starts with 6 in Tamil Nadu)",
   sender_phone: "the writer's phone number — a bare number of ~10 digits is the answer",
   addressee_name: "the name of the person the letter goes to",
   addressee_office: "the office/authority the letter goes to — a bare office or place name is the answer",

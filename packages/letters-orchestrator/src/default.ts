@@ -12,7 +12,7 @@ import {
   saveLetterDraft,
   saveLetterFeedback,
 } from "@urimai/db";
-import { officeLocality, pickCcOffices, pickToOffice } from "@urimai/letter-types";
+import { districtForPincode, officeLocality, pickCcOffices, pickToOffice, senderPincode } from "@urimai/letter-types";
 import { classifyLetter, extractLetterFacts, searchAddressee } from "@urimai/letters-extractor";
 import { draftLetter } from "@urimai/letters-drafter";
 import type { OfficeAddress } from "@urimai/types";
@@ -68,9 +68,11 @@ export function createDefaultLettersOrchestrator(opts: DefaultLettersOrchestrato
       const categories = await listLatestGrievanceCategories();
       const cat = categoryId ? categories.find((c) => c.id === categoryId) ?? null : null;
       const offices = await listLatestOffices();
-      // The To office's locality is the JURISDICTION the matter belongs to (taluk /
-      // village / station from the case entities) — NEVER the sender's own address.
-      const locality = officeLocality(facts);
+      // The To office's locality is the JURISDICTION the matter belongs to (taluk / village /
+      // station from the case entities). If none was captured, fall back to the DISTRICT from
+      // the citizen's PIN code — a broad area (not their house address), so the letter is at
+      // least routed to the right district's office.
+      const locality = officeLocality(facts) ?? districtForPincode(senderPincode(facts));
 
       let to: OfficeAddress | null = null;
       if (need.to) {

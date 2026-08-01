@@ -4,7 +4,7 @@
  * LetterType record + collected facts, in code. The LLM never touches these. Legal
  * citations enter the letter HERE, from the LetterType's legalRefs, and nowhere else.
  */
-import type { LetterFacts, LetterType, OfficeAddress } from "@urimai/types";
+import { districtForPincode, senderPincode, type LetterFacts, type LetterType, type OfficeAddress } from "@urimai/types";
 
 export type Language = "ta" | "en" | "bilingual";
 
@@ -51,7 +51,17 @@ export function stripCuratorMarkers(s: string): string {
 
 export function buildSenderBlock(facts: LetterFacts): string {
   const lines = [facts.sender_name ?? BLANK];
-  if (facts.sender_address) lines.push(facts.sender_address);
+  const pin = senderPincode(facts);
+  // Keep the street address, but strip any PIN code that leaked into it (the pincode gets
+  // its own line below with the district) so it isn't printed twice.
+  if (facts.sender_address) {
+    const addr = pin ? facts.sender_address.replace(pin, "").replace(/[,\s-]+$/, "").trim() : facts.sender_address;
+    if (addr) lines.push(addr);
+  }
+  if (pin) {
+    const district = districtForPincode(pin);
+    lines.push(district ? `${district} - ${pin}` : pin);
+  }
   if (facts.sender_phone) lines.push(facts.sender_phone);
   return lines.join("\n");
 }
