@@ -1,0 +1,39 @@
+prefix,district,district_tamil,confidence,notes
+600,Chennai,சென்னை,high,Chennai city — 600001-600123
+601,Tiruvallur,திருவள்ளூர்,high,Ponneri / Gummidipoondi belt
+602,Tiruvallur,திருவள்ளூர்,high,Tiruvallur / Poonamallee belt
+603,Chengalpattu,செங்கல்பட்டு,high,"Chengalpattu / Maraimalai Nagar; some Kancheepuram overlap"
+604,Tiruvannamalai,திருவண்ணாமலை,medium,"Tiruvannamalai / Cheyyar; overlaps Villupuram — VERIFY"
+605,Villupuram,விழுப்புரம்,high,Villupuram / Tindivanam
+606,Tiruvannamalai,திருவண்ணாமலை,medium,"Tiruvannamalai / Polur; some Villupuram overlap — VERIFY"
+607,Cuddalore,கடலூர்,high,Cuddalore / Panruti
+608,Cuddalore,கடலூர்,high,Chidambaram belt
+609,Mayiladuthurai,மயிலாடுதுறை,medium,"Mayiladuthurai (new district, split from Nagapattinam 2020) — VERIFY"
+610,Tiruvarur,திருவாரூர்,high,Tiruvarur / Mannargudi
+611,Nagapattinam,நாகப்பட்டினம்,high,Nagapattinam / Velankanni
+612,Thanjavur,தஞ்சாவூர்,high,Kumbakonam belt
+613,Thanjavur,தஞ்சாவூர்,high,Thanjavur town
+614,Pudukkottai,புதுக்கோட்டை,medium,"Pattukkottai / Peravurani; overlaps Thanjavur — VERIFY"
+620,Tiruchirappalli,திருச்சிராப்பள்ளி,high,Trichy city
+621,Tiruchirappalli,திருச்சிராப்பள்ளி,medium,"Trichy rural / Perambalur / Ariyalur — VERIFY split"
+622,Pudukkottai,புதுக்கோட்டை,high,Pudukkottai town
+623,Ramanathapuram,இராமநாதபுரம்,high,Ramanathapuram / Rameswaram
+624,Dindigul,திண்டுக்கல்,high,Dindigul / Kodaikanal
+625,Madurai,மதுரை,high,Madurai city
+626,Virudhunagar,விருதுநகர்,high,Virudhunagar / Sivakasi
+627,Tirunelveli,திருநெல்வேலி,high,"Tirunelveli; Tenkasi split off 2019 — VERIFY Tenkasi rows"
+628,Thoothukudi,தூத்துக்குடி,high,Thoothukudi / Tuticorin
+629,Kanniyakumari,கன்னியாகுமரி,high,Nagercoil belt
+630,Sivaganga,சிவகங்கை,high,Sivaganga / Karaikudi
+631,Ranipet,இராணிப்பேட்டை,medium,"Ranipet (new district 2019, split from Vellore) — VERIFY"
+632,Vellore,வேலூர்,high,Vellore city
+633,Tirupathur,திருப்பத்தூர்,low,"Tirupathur (new district 2019); sparse prefix — VERIFY"
+634,Tirupathur,திருப்பத்தூர்,low,"Vaniyambadi / Ambur belt — VERIFY"
+635,Krishnagiri,கிருஷ்ணகிரி,medium,"Krishnagiri / Hosur; overlaps Dharmapuri — VERIFY"
+636,Salem,சேலம்,high,"Salem city; some Dharmapuri overlap"
+637,Namakkal,நாமக்கல்,high,Namakkal / Tiruchengode
+638,Erode,ஈரோடு,high,Erode / Bhavani
+639,Karur,கரூர்,high,Karur town
+641,Coimbatore,கோயம்புத்தூர்,high,Coimbatore city
+642,Tiruppur,திருப்பூர்,medium,"Pollachi / Udumalpet; Pollachi is Coimbatore district — VERIFY"
+643,Nilgiris,நீலகிரி,high,Ooty / Coonoor / Gudalur
